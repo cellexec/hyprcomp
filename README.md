@@ -149,6 +149,7 @@ terminal = true
 Window types:
 - `terminal = true` — runs in alacritty with zsh
 - `browser = true` — adds `--user-data-dir` for per-project isolation
+- `url_env = "VAR"` — reads `VAR` from the project's `.env` file and opens it in the browser
 - Neither — launched as a plain GUI app via hyprctl
 
 ### Subprojects (monorepo support)

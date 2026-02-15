@@ -1112,6 +1112,20 @@ class OverviewApp(Gtk.Application):
             if "cwd" in win:
                 cwd = os.path.join(project_dir, win["cwd"])
 
+            # Resolve url_env from project .env file
+            url = ""
+            if win.get("url_env"):
+                env_file = os.path.join(cwd, ".env")
+                try:
+                    with open(env_file) as ef:
+                        for line in ef:
+                            line = line.strip()
+                            if line.startswith(f"{win['url_env']}="):
+                                url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                                break
+                except FileNotFoundError:
+                    pass
+
             before = sum(1 for c in hyprctl_json("clients") if c["workspace"]["id"] == ws)
 
             if win.get("terminal"):
@@ -1121,7 +1135,8 @@ class OverviewApp(Gtk.Application):
             elif win.get("browser"):
                 data_dir = os.path.expanduser(f"~/.config/hyprcomp/chromium/{name}")
                 os.makedirs(data_dir, exist_ok=True)
-                hyprctl_dispatch(f"exec {cmd} --user-data-dir={data_dir}")
+                url_arg = f" {url}" if url else ""
+                hyprctl_dispatch(f"exec {cmd} --user-data-dir={data_dir}{url_arg}")
             else:
                 hyprctl_dispatch(f"exec {cmd}")
 
