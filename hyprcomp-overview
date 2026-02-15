@@ -939,21 +939,38 @@ class OverviewApp(Gtk.Application):
         except Exception:
             pass
 
-        # Launch apps on specific workspaces (use full path for claude)
-        claude_bin = os.path.expanduser("~/.local/bin/claude")
-        hyprctl_dispatch(f"exec [workspace {ws1} silent] alacritty --working-directory {project_dir} -e {claude_bin}")
-        hyprctl_dispatch(f"exec [workspace {ws2} silent] chromium")
-        hyprctl_dispatch(f"exec [workspace {ws3} silent] alacritty --working-directory {project_dir} -e nvim")
+        self.creating_project = False
+        self._hide()
 
-        # Switch to the new project's first workspace
+        # Launch apps in background (needs delays for windows to map)
+        claude_bin = os.path.expanduser("~/.local/bin/claude")
+        threading.Thread(
+            target=self._launch_project_apps,
+            args=(project_dir, ws1, ws2, ws3, claude_bin, row),
+            daemon=True,
+        ).start()
+
+    def _launch_project_apps(self, project_dir, ws1, ws2, ws3, claude_bin, row):
+        """Launch apps sequentially on correct workspaces."""
+        import time
+
+        hyprctl_dispatch(f"workspace {ws1}")
+        hyprctl_dispatch(f"exec alacritty --working-directory {project_dir} -e {claude_bin}")
+        time.sleep(1.0)
+
+        hyprctl_dispatch(f"workspace {ws2}")
+        hyprctl_dispatch(f"exec chromium --new-window")
+        time.sleep(1.0)
+
+        hyprctl_dispatch(f"workspace {ws3}")
+        hyprctl_dispatch(f"exec alacritty --working-directory {project_dir} -e nvim")
+        time.sleep(0.5)
+
         hyprctl_dispatch(f"workspace {ws1}")
         subprocess.Popen(
             ["pkill", "-SIGRTMIN+10", "waybar"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
-
-        self.creating_project = False
-        self._hide()
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
