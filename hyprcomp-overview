@@ -326,10 +326,19 @@ def draw_empty(da, cr, width, height, *_args):
 
 CSS = f"""
 window {{
-    background-color: rgba(0, 0, 0, 0.75);
+    background-color: rgba(0, 0, 0, 0.95);
 }}
 .overview-box {{
-    padding: 40px;
+    padding: 0;
+}}
+.projects-scroll {{
+    background: transparent;
+}}
+.projects-scroll scrollbar {{
+    opacity: 0;
+}}
+.projects-box {{
+    padding: 20px 40px 40px 40px;
 }}
 .project-label {{
     color: #cdd6f4;
@@ -377,9 +386,8 @@ window {{
 }}
 .toolbar {{
     background: rgba(108, 112, 134, 0.2);
-    border-radius: 8px;
-    padding: 8px 14px;
-    margin-bottom: 20px;
+    border-radius: 0;
+    padding: 8px 40px;
 }}
 .toolbar-logo-icon {{
     color: #89b4fa;
@@ -637,12 +645,11 @@ class OverviewApp(Gtk.Application):
         
         outer = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
-            halign=Gtk.Align.CENTER,
-            valign=Gtk.Align.CENTER,
         )
+        outer.set_vexpand(True)
         outer.add_css_class("overview-box")
 
-        # Toolbar
+        # Toolbar — fixed at top, full width
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         toolbar.add_css_class("toolbar")
 
@@ -691,6 +698,20 @@ class OverviewApp(Gtk.Application):
         toolbar.append(hints)
 
         outer.append(toolbar)
+
+        # Scrollable container for project rows
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        scroll.add_css_class("projects-scroll")
+
+        projects_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+        )
+        projects_box.set_vexpand(True)
+        projects_box.add_css_class("projects-box")
 
         # Per-row max column (highest occupied or active)
         row_max = {}
@@ -795,8 +816,10 @@ class OverviewApp(Gtk.Application):
                 row_box.append(btn)
 
             group.append(row_box)
-            outer.append(group)
+            projects_box.append(group)
 
+        scroll.set_child(projects_box)
+        outer.append(scroll)
         self.win.set_child(outer)
 
     # ── Thumbnails ───────────────────────────────────────────────────────────
