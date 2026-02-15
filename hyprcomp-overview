@@ -23,7 +23,6 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 
 from gi.repository import Gdk, Gio, GLib, Gtk, Gtk4LayerShell
-from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import signal
@@ -65,11 +64,36 @@ C = {
 
 WIN_COLORS = [C["blue"], C["teal"], C["green"], C["mauve"], C["peach"], C["lavender"]]
 
-# ── Data layer ──────────────────────────────────────────────────────────────
+# ── Hyprland IPC ───────────────────────────────────────────────────────────
+
+_HYPR_SOCK = None
+
+
+def _get_sock_path():
+    global _HYPR_SOCK
+    if _HYPR_SOCK is None:
+        sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+        runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        _HYPR_SOCK = f"{runtime}/hypr/{sig}/.socket.sock"
+    return _HYPR_SOCK
 
 
 def hyprctl_json(cmd):
-    return json.loads(subprocess.check_output(["hyprctl", cmd, "-j"]))
+    """Query Hyprland via IPC socket (no subprocess)."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(_get_sock_path())
+    sock.sendall(f"j/{cmd}".encode())
+    chunks = []
+    while True:
+        data = sock.recv(8192)
+        if not data:
+            break
+        chunks.append(data)
+    sock.close()
+    return json.loads(b"".join(chunks))
+
+
+# ── Data layer ──────────────────────────────────────────────────────────────
 
 
 def load_projects():
@@ -100,25 +124,8 @@ def capture_screenshot(monitor_name):
     return None
 
 
-def load_all():
-    """Load grid data and screenshot in parallel."""
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        f_projects = pool.submit(load_projects)
-        f_active = pool.submit(hyprctl_json, "activeworkspace")
-        f_clients = pool.submit(hyprctl_json, "clients")
-        f_monitors = pool.submit(hyprctl_json, "monitors")
-        f_workspaces = pool.submit(hyprctl_json, "workspaces")
-
-        # activeworkspace finishes fast — start grim with its monitor name
-        active_ws = f_active.result()
-        f_screenshot = pool.submit(capture_screenshot, active_ws.get("monitor", ""))
-
-        projects = f_projects.result()
-        clients = f_clients.result()
-        monitors = f_monitors.result()
-        workspaces = f_workspaces.result()
-        screenshot_path = f_screenshot.result()
-
+def _parse_grid(active_ws, clients, monitors, workspaces):
+    """Parse hyprctl data into grid model."""
     active_ws_id = active_ws["id"]
 
     ws_clients = {}
@@ -147,6 +154,25 @@ def load_all():
             break
     if primary_mon is None and monitors:
         primary_mon = mon_info[monitors[0]["name"]]
+
+    return active_ws_id, ws_clients, ws_mon, primary_mon
+
+
+def load_all():
+    """Load grid data and screenshot. IPC queries are fast; grim runs in parallel."""
+    # IPC socket queries — sequential is fine (~5ms each)
+    active_ws = hyprctl_json("activeworkspace")
+    clients = hyprctl_json("clients")
+    monitors = hyprctl_json("monitors")
+    workspaces = hyprctl_json("workspaces")
+    projects = load_projects()
+
+    active_ws_id, ws_clients, ws_mon, primary_mon = _parse_grid(
+        active_ws, clients, monitors, workspaces
+    )
+
+    # grim is the slow part — run it last (still in background thread)
+    screenshot_path = capture_screenshot(active_ws.get("monitor", ""))
 
     grid_data = (projects, active_ws_id, ws_clients, ws_mon, primary_mon)
     return grid_data, screenshot_path
@@ -154,47 +180,15 @@ def load_all():
 
 def load_grid_data():
     """Reload just the grid data (no screenshot)."""
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        f_active = pool.submit(hyprctl_json, "activeworkspace")
-        f_clients = pool.submit(hyprctl_json, "clients")
-        f_monitors = pool.submit(hyprctl_json, "monitors")
-        f_workspaces = pool.submit(hyprctl_json, "workspaces")
-
-        active_ws = f_active.result()
-        clients = f_clients.result()
-        monitors = f_monitors.result()
-        workspaces = f_workspaces.result()
-
+    active_ws = hyprctl_json("activeworkspace")
+    clients = hyprctl_json("clients")
+    monitors = hyprctl_json("monitors")
+    workspaces = hyprctl_json("workspaces")
     projects = load_projects()
-    active_ws_id = active_ws["id"]
 
-    ws_clients = {}
-    for c in clients:
-        ws_id = c["workspace"]["id"]
-        if ws_id > 0:
-            ws_clients.setdefault(ws_id, []).append(c)
-
-    mon_info = {}
-    for m in monitors:
-        mon_info[m["name"]] = {
-            "x": m["x"], "y": m["y"],
-            "width": m["width"], "height": m["height"],
-        }
-
-    ws_mon = {}
-    for ws in workspaces:
-        mon_name = ws.get("monitor", "") or ws.get("lastmonitor", "")
-        if mon_name in mon_info:
-            ws_mon[ws["id"]] = mon_info[mon_name]
-
-    primary_mon = None
-    for m in monitors:
-        if m.get("focused"):
-            primary_mon = mon_info[m["name"]]
-            break
-    if primary_mon is None and monitors:
-        primary_mon = mon_info[monitors[0]["name"]]
-
+    active_ws_id, ws_clients, ws_mon, primary_mon = _parse_grid(
+        active_ws, clients, monitors, workspaces
+    )
     return projects, active_ws_id, ws_clients, ws_mon, primary_mon
 
 
@@ -434,37 +428,48 @@ class OverviewApp(Gtk.Application):
     def _show(self):
         self._visible = True
         self.screenshot_texture = None
-        self.win.set_child(None)
         self.win.set_visible(True)
         self.win.present()
-        threading.Thread(target=self._load_and_build, daemon=True).start()
-
-    def _hide(self):
-        self._visible = False
-        self.win.set_visible(False)
-
-    def _load_and_build(self):
-        grid_data, screenshot_path = load_all()
-        GLib.idle_add(self._on_data_ready, grid_data, screenshot_path)
-
-    def _on_data_ready(self, grid_data, screenshot_path):
-        if not self._visible:
-            return False
+        # IPC queries are ~5ms each — fast enough to run on main thread
+        grid_data = load_grid_data()
         self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
             grid_data
         )
         self.active_row = ws_to_row(self.active_ws_id)
         self.active_col = ws_to_col(self.active_ws_id)
-
-        if screenshot_path and os.path.isfile(screenshot_path):
-            try:
-                self.screenshot_texture = Gdk.Texture.new_from_filename(screenshot_path)
-            except Exception:
-                pass
-
         self._build_grid()
         self._start_ws_listener()
+        # Capture fresh screenshot of active ws in background
+        threading.Thread(target=self._capture_active_thumb, daemon=True).start()
+
+    def _capture_active_thumb(self):
+        try:
+            active_ws = hyprctl_json("activeworkspace")
+            path = capture_screenshot(active_ws.get("monitor", ""))
+            if path and self._visible:
+                GLib.idle_add(self._update_active_thumb, path)
+        except Exception:
+            pass
+
+    def _update_active_thumb(self, path):
+        if not self._visible:
+            return False
+        try:
+            self.screenshot_texture = Gdk.Texture.new_from_filename(path)
+        except Exception:
+            return False
+        # Update just the active cell's content
+        btn = self._cells.get(self.active_ws_id)
+        if btn:
+            pic = Gtk.Picture.new_for_paintable(self.screenshot_texture)
+            pic.set_size_request(CELL_W, CELL_H)
+            pic.set_content_fit(Gtk.ContentFit.COVER)
+            btn.set_child(pic)
         return False
+
+    def _hide(self):
+        self._visible = False
+        self.win.set_visible(False)
 
     # ── Hyprland IPC listener ────────────────────────────────────────────────
 
