@@ -946,11 +946,11 @@ class OverviewApp(Gtk.Application):
         claude_bin = os.path.expanduser("~/.local/bin/claude")
         threading.Thread(
             target=self._launch_project_apps,
-            args=(project_dir, ws1, ws2, ws3, claude_bin, row),
+            args=(project_dir, ws1, ws2, ws3, claude_bin, name),
             daemon=True,
         ).start()
 
-    def _launch_project_apps(self, project_dir, ws1, ws2, ws3, claude_bin, row):
+    def _launch_project_apps(self, project_dir, ws1, ws2, ws3, claude_bin, name):
         """Launch apps sequentially on correct workspaces."""
         import time
 
