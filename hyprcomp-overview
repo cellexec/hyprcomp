@@ -333,8 +333,17 @@ window {{
 }}
 .project-label {{
     color: #cdd6f4;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
+}}
+.project-badge {{
+    color: #89b4fa;
+    font-size: 11px;
+    font-weight: bold;
+    background: rgba(108, 112, 134, 0.2);
+    border-radius: 4px;
+    min-width: 18px;
+    padding: 1px 6px;
 }}
 .project-label-active {{
     color: #89b4fa;
@@ -357,7 +366,7 @@ window {{
 }}
 .del-btn {{
     all: unset;
-    color: #6c7086;
+    color: #f38ba8;
     padding: 4px 8px;
     font-size: 16px;
     border-radius: 6px;
@@ -462,6 +471,8 @@ class OverviewApp(Gtk.Application):
         self.hovered_row = None
         self._sel_row = None
         self._sel_col = None
+        self._confirm_row = None
+        self._confirm_overlay = None
         self._cells = {}
         self._row_labels = {}
         self._row_max = {}
@@ -652,16 +663,15 @@ class OverviewApp(Gtk.Application):
             if idx > 0:
                 group.set_margin_top(ROW_GAP * 2)
 
-            # Title row: label + delete button
+            # Title row: badge + label + delete button
             title_box = Gtk.Box(
                 orientation=Gtk.Orientation.HORIZONTAL,
                 spacing=CELL_GAP,
             )
-            del_btn = Gtk.Button(label="\u00d7")
-            del_btn.add_css_class("del-btn")
-            del_btn.set_valign(Gtk.Align.CENTER)
-            del_btn.connect("clicked", self._on_delete_click, row, name, group)
-            title_box.append(del_btn)
+
+            badge = Gtk.Label(label=str(idx + 1))
+            badge.add_css_class("project-badge")
+            title_box.append(badge)
 
             display_name = name.rsplit("/", 1)[-1]
             label = Gtk.Label(label=display_name, xalign=0.0)
@@ -671,6 +681,13 @@ class OverviewApp(Gtk.Application):
                 label.add_css_class("project-label-active")
             self._row_labels[row] = label
             title_box.append(label)
+
+            del_btn = Gtk.Button(label="\u00d7")
+            del_btn.add_css_class("del-btn")
+            del_btn.set_valign(Gtk.Align.CENTER)
+            del_btn.set_focusable(False)
+            del_btn.connect("clicked", self._on_delete_click, row, name, group)
+            title_box.append(del_btn)
             group.append(title_box)
 
             # Cells row
@@ -688,6 +705,7 @@ class OverviewApp(Gtk.Application):
                 has_windows = ws in self.ws_clients
 
                 btn = Gtk.Button()
+                btn.set_focusable(False)
                 btn.add_css_class("ws-cell")
                 if is_ws_active:
                     btn.add_css_class("ws-cell-active")
@@ -729,6 +747,7 @@ class OverviewApp(Gtk.Application):
 
         # "+ New Project" button
         self.new_btn = Gtk.Button(label="+ New Project")
+        self.new_btn.set_focusable(False)
         self.new_btn.add_css_class("new-btn")
         self.new_btn.set_halign(Gtk.Align.CENTER)
         self.new_btn.set_margin_top(20)
@@ -799,6 +818,16 @@ class OverviewApp(Gtk.Application):
                 return True
             return False
 
+        # Confirm dialog mode
+        if self._confirm_row is not None:
+            if keyval in (Gdk.KEY_Return, Gdk.KEY_y):
+                self._confirm_delete()
+                return True
+            if keyval in (Gdk.KEY_Escape, Gdk.KEY_q, Gdk.KEY_n):
+                self._dismiss_confirm()
+                return True
+            return False
+
         if keyval in (Gdk.KEY_Escape, Gdk.KEY_q):
             self._close_overlay()
             return True
@@ -843,8 +872,9 @@ class OverviewApp(Gtk.Application):
             self._new_workspace_in_row(self.hovered_row)
             return True
 
-        if keyval == Gdk.KEY_x and self.hovered_row is not None:
-            self._delete_project_row(self.hovered_row)
+        if keyval in (Gdk.KEY_x, Gdk.KEY_Delete) and self.hovered_row is not None:
+            name = self.projects.get(self.hovered_row, "")
+            self._show_delete_confirm(self.hovered_row, name)
             return True
 
         return False
@@ -906,38 +936,58 @@ class OverviewApp(Gtk.Application):
         self.active_col = ws_to_col(self.active_ws_id)
         self._build_grid()
 
-    def _on_delete_click(self, btn, row, name, row_box):
-        parent = btn.get_parent()
-        parent.remove(btn)
+    def _on_delete_click(self, _btn, row, name, _group):
+        self._show_delete_confirm(row, name)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        box.add_css_class("confirm-box")
-        box.set_valign(Gtk.Align.CENTER)
+    def _show_delete_confirm(self, row, name):
+        """Show a centered confirm dialog overlay."""
+        self._confirm_row = row
+        display = name.rsplit("/", 1)[-1]
 
-        lbl = Gtk.Label(label=f"Delete {name}?")
+        overlay = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+            spacing=12,
+        )
+        overlay.add_css_class("confirm-box")
+
+        lbl = Gtk.Label(label=f"Close workspace '{display}'?")
         lbl.add_css_class("confirm-label")
-        box.append(lbl)
+        overlay.append(lbl)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                          halign=Gtk.Align.CENTER)
 
         yes = Gtk.Button(label="Yes")
         yes.add_css_class("confirm-yes")
-        yes.connect("clicked", self._do_delete, row)
-        box.append(yes)
+        yes.connect("clicked", lambda _b: self._confirm_delete())
+        btn_box.append(yes)
 
         no = Gtk.Button(label="No")
         no.add_css_class("confirm-no")
-        no.connect("clicked", self._cancel_delete, box, row, name, row_box)
-        box.append(no)
+        no.connect("clicked", lambda _b: self._dismiss_confirm())
+        btn_box.append(no)
 
-        parent.append(box)
+        overlay.append(btn_box)
 
-    def _cancel_delete(self, _no_btn, confirm_box, row, name, row_box):
-        parent = confirm_box.get_parent()
-        parent.remove(confirm_box)
-        del_btn = Gtk.Button(label="\u00d7")
-        del_btn.add_css_class("del-btn")
-        del_btn.set_valign(Gtk.Align.CENTER)
-        del_btn.connect("clicked", self._on_delete_click, row, name, row_box)
-        parent.append(del_btn)
+        self._confirm_overlay = overlay
+        self.win.set_child(overlay)
+
+    def _confirm_delete(self):
+        row = self._confirm_row
+        self._dismiss_confirm()
+        self._delete_project_row(row)
+
+    def _dismiss_confirm(self):
+        saved_row = self._sel_row
+        saved_col = self._sel_col
+        self._confirm_row = None
+        self._confirm_overlay = None
+        self._build_grid()
+        self._sel_row = saved_row
+        self._sel_col = saved_col
+        self._update_selection()
 
     def _delete_project_row(self, row):
         """Close all windows in a project row, delete it, and reload."""
@@ -952,9 +1002,6 @@ class OverviewApp(Gtk.Application):
                     )
         subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
         self._reload_grid()
-
-    def _do_delete(self, _btn, row):
-        self._delete_project_row(row)
 
     def _on_new_project(self, _btn):
         if self.creating_project:

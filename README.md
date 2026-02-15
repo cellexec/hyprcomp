@@ -198,8 +198,9 @@ Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve 
 | Click cell | Switch to that workspace |
 | d | Close all windows in selected workspace |
 | a | Open new workspace at end of selected project |
-| x | Delete selected project (closes all windows) |
-| q / Escape | Close overlay |
+| x / Delete | Close selected project (with confirmation) |
+| y / Enter | Confirm action |
+| n / Escape / q | Cancel action or close overlay |
 
 ### Manage projects
 
