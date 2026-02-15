@@ -20,7 +20,7 @@ Project C:       ws 21         ws 22         ws 23
 - **SUPER+SHIFT+1-9** - move window to column N of current row
 - **Directional animations** - horizontal slide for column switches, vertical slide for project switches
 - **Waybar integration** - project name + row-aware workspace buttons with click support
-- **Workspace overview** - fullscreen overlay showing all projects and workspaces in a 2D grid (SUPER+Tab)
+- **Workspace overview** - fullscreen overlay showing all projects and workspaces in a 2D grid (SUPER+Tab), with cached workspace screenshots, keyboard shortcuts (d=close, a=new, q=quit), and live gesture tracking
 - **Persistent state** - project names survive reboots
 
 ## Dependencies
@@ -94,7 +94,17 @@ Then merge the module definitions from `config/waybar/hyprcomp-modules.jsonc` in
 
 Add the styles from `config/waybar/hyprcomp.css` to your waybar `style.css`. The CSS uses Catppuccin Mocha color variables -- adjust to match your theme.
 
-### 5. Reload
+### 5. Autostart the overview daemon (optional)
+
+The workspace overview runs as a persistent daemon for instant SUPER+Tab. Add to your Hyprland autostart:
+
+```conf
+exec-once = ~/projects/hyprcomp/hyprcomp-overview &
+```
+
+Without autostart, the first SUPER+Tab has a ~1s cold start (Python imports), then subsequent toggles are instant.
+
+### 6. Reload
 
 ```bash
 hyprctl reload
@@ -137,11 +147,15 @@ hyprcomp overview          # Toggle workspace overview overlay
 
 Each project gets a row of 10 workspace slots. Row 0 uses workspaces 1-10, row 1 uses 11-20, and so on (up to 9 rows).
 
-The `hyprcomp` script translates all navigation into absolute workspace numbers and dispatches via `hyprctl`. Before each dispatch, it sets the animation direction dynamically -- `slide` for horizontal movement, `slidevert` for vertical -- so transitions feel natural.
+The `hyprcomp` script translates all navigation into absolute workspace numbers and dispatches via `hyprctl`. Before each dispatch, it sets the animation direction dynamically -- `slide` for horizontal movement, `slidevert` for vertical -- so transitions feel natural. A screenshot of the current workspace is cached on each switch for the overview thumbnails.
+
+The overview overlay (`hyprcomp-overview`) is a GTK4 + layer-shell Python app that runs as a persistent daemon. It queries Hyprland's IPC socket directly (~2.5ms for all data) and listens on socket2 for live workspace change events. Screenshots are captured asynchronously via grim.
 
 State is stored in `~/.config/hyprcomp/`:
 - `state` - current row number
 - `projects` - row-to-name mapping (e.g., `0:homelab`)
+
+Workspace thumbnails are cached in `~/.cache/hyprcomp/thumbs/`.
 
 The waybar modules replace the built-in `hyprland/workspaces` widget with custom scripts that only show workspaces belonging to the current project row, labeled with column numbers (1-9) instead of absolute workspace IDs.
 
