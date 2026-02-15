@@ -373,12 +373,12 @@ cmd_delete_row() {
 }
 
 cmd_overview() {
-    # Toggle: kill existing instance or launch new one
-    if pkill -f 'hyprcomp-overview' 2>/dev/null; then
+    # Toggle: signal existing daemon or start new one
+    if pkill -USR1 -f 'hyprcomp-overview' 2>/dev/null; then
         exit 0
     fi
     sync_state
-    exec "$(dirname "$0")/hyprcomp-overview"
+    "$(dirname "$0")/hyprcomp-overview" &disown
 }
 
 # --- Main ---

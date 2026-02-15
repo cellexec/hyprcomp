@@ -22,7 +22,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 
-from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell
+from gi.repository import Gdk, Gio, GLib, Gtk, Gtk4LayerShell
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
@@ -380,7 +380,8 @@ window {{
 
 class OverviewApp(Gtk.Application):
     def __init__(self):
-        super().__init__(application_id="com.hyprcomp.overview")
+        super().__init__(application_id="com.hyprcomp.overview",
+                         flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.screenshot_texture = None
         self.creating_project = False
         self.hovered_ws = None
@@ -388,9 +389,10 @@ class OverviewApp(Gtk.Application):
         self._cells = {}
         self._row_labels = {}
         self._col_labels = {}
+        self._visible = False
 
     def do_activate(self):
-        # Show window immediately (dark overlay appears instant)
+        # Create window once — reused across show/hide cycles
         self.win = Gtk.ApplicationWindow(application=self)
         Gtk4LayerShell.init_for_window(self.win)
         Gtk4LayerShell.set_layer(self.win, Gtk4LayerShell.Layer.OVERLAY)
@@ -416,16 +418,38 @@ class OverviewApp(Gtk.Application):
         key_ctrl.connect("key-pressed", self._on_key)
         self.win.add_controller(key_ctrl)
 
-        self.win.present()
+        # Register SIGUSR1 for toggle from hyprcomp script
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR1, self._on_toggle)
 
-        # Load data in background, build grid when ready
+        # Show and load data
+        self._show()
+
+    def _on_toggle(self):
+        if self._visible:
+            self._hide()
+        else:
+            self._show()
+        return True  # keep handler registered
+
+    def _show(self):
+        self._visible = True
+        self.screenshot_texture = None
+        self.win.set_child(None)
+        self.win.set_visible(True)
+        self.win.present()
         threading.Thread(target=self._load_and_build, daemon=True).start()
+
+    def _hide(self):
+        self._visible = False
+        self.win.set_visible(False)
 
     def _load_and_build(self):
         grid_data, screenshot_path = load_all()
         GLib.idle_add(self._on_data_ready, grid_data, screenshot_path)
 
     def _on_data_ready(self, grid_data, screenshot_path):
+        if not self._visible:
+            return False
         self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
             grid_data
         )
@@ -687,9 +711,8 @@ class OverviewApp(Gtk.Application):
         return False
 
     def _close_overlay(self):
-        """Hide the overlay window instantly and exit."""
-        self.win.set_visible(False)
-        GLib.idle_add(self.quit)
+        """Hide the overlay window instantly."""
+        self._hide()
 
     def _switch_to_ws(self, ws_id):
         """Switch to workspace, update state, close overlay."""
