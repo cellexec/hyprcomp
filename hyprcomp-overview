@@ -1097,12 +1097,11 @@ class OverviewApp(Gtk.Application):
         ).start()
 
     def _launch_project_apps(self, project_dir, row, name, windows_config):
-        """Launch apps sequentially on correct workspaces."""
+        """Launch apps sequentially, waiting for each window to map."""
         import time
 
         for i, win in enumerate(windows_config[:10]):
-            col = i + 1
-            ws = row_col_to_ws(row, col)
+            ws = row_col_to_ws(row, i + 1)
             hyprctl_dispatch(f"workspace {ws}")
 
             cmd = os.path.expanduser(win.get("exec", ""))
@@ -1112,6 +1111,8 @@ class OverviewApp(Gtk.Application):
             cwd = project_dir
             if "cwd" in win:
                 cwd = os.path.join(project_dir, win["cwd"])
+
+            before = sum(1 for c in hyprctl_json("clients") if c["workspace"]["id"] == ws)
 
             if win.get("terminal"):
                 hyprctl_dispatch(
@@ -1124,8 +1125,13 @@ class OverviewApp(Gtk.Application):
             else:
                 hyprctl_dispatch(f"exec {cmd}")
 
-            if i < len(windows_config) - 1:
-                time.sleep(1.0)
+            # Wait for the window to appear on this workspace
+            deadline = time.time() + 15
+            while time.time() < deadline:
+                time.sleep(0.3)
+                after = sum(1 for c in hyprctl_json("clients") if c["workspace"]["id"] == ws)
+                if after > before:
+                    break
 
         hyprctl_dispatch(f"workspace {row_col_to_ws(row, 1)}")
         subprocess.Popen(
