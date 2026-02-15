@@ -959,7 +959,9 @@ class OverviewApp(Gtk.Application):
         time.sleep(1.0)
 
         hyprctl_dispatch(f"workspace {ws2}")
-        hyprctl_dispatch(f"exec chromium --new-window")
+        chrome_data = os.path.expanduser(f"~/.config/hyprcomp/chromium/{name}")
+        os.makedirs(chrome_data, exist_ok=True)
+        hyprctl_dispatch(f"exec chromium --user-data-dir={chrome_data}")
         time.sleep(1.0)
 
         hyprctl_dispatch(f"workspace {ws3}")
