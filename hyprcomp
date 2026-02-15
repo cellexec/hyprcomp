@@ -69,9 +69,16 @@ next_free_row() {
         echo 0
         return
     fi
-    local max
-    max=$(get_max_row)
-    echo $(( max + 1 ))
+    # Reuse gaps from deleted rows
+    local expected=0
+    while IFS= read -r row; do
+        if [[ $row -ne $expected ]]; then
+            echo "$expected"
+            return
+        fi
+        expected=$((expected + 1))
+    done < <(awk -F: '{print $1}' "$PROJECTS_FILE" | sort -n)
+    echo "$expected"
 }
 
 workspace_has_windows() {
@@ -222,8 +229,8 @@ cmd_right() {
     local target_ws
     target_ws=$(row_col_to_workspace "$row" $((col + 1)))
 
-    # Only create a new empty workspace if the current one is also empty
-    if ! workspace_has_windows "$target_ws" && workspace_has_windows "$ws"; then
+    # Don't create a new empty workspace if the current one is empty
+    if ! workspace_has_windows "$target_ws" && ! workspace_has_windows "$ws"; then
         return 0
     fi
 
@@ -340,6 +347,27 @@ cmd_delete() {
     echo "Deleted project '$name' (row $row)"
 }
 
+cmd_delete_row() {
+    local row=${1:?Usage: hyprcomp delete-row <row>}
+    if ! row_exists "$row"; then
+        echo "Row $row is not a registered project"
+        return 1
+    fi
+    local name
+    name=$(get_project_name "$row")
+    sed -i "/^${row}:/d" "$PROJECTS_FILE"
+    echo "Deleted project '$name' (row $row)"
+}
+
+cmd_overview() {
+    # Toggle: kill existing instance or launch new one
+    if pkill -f 'hyprcomp-overview' 2>/dev/null; then
+        exit 0
+    fi
+    sync_state
+    exec "$(dirname "$0")/hyprcomp-overview"
+}
+
 # --- Main ---
 
 cmd=${1:-help}
@@ -356,7 +384,9 @@ case "$cmd" in
     list)   cmd_list ;;
     create) cmd_create "$@" ;;
     rename) cmd_rename "$@" ;;
-    delete) cmd_delete ;;
+    delete)     cmd_delete ;;
+    delete-row) cmd_delete_row "$@" ;;
+    overview)   cmd_overview ;;
     help)
         echo "Usage: hyprcomp <command> [args]"
         echo ""
@@ -372,6 +402,8 @@ case "$cmd" in
         echo "  create <name>   Register a new project row"
         echo "  rename <name>   Rename current project row"
         echo "  delete          Unregister current project row"
+        echo "  delete-row <N>  Unregister project at row N (closes windows)"
+        echo "  overview        Toggle workspace overview overlay"
         ;;
     *)
         echo "Unknown command: $cmd"

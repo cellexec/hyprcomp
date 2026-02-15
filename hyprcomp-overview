@@ -1,0 +1,641 @@
+#!/usr/bin/env python3
+"""HyprComp Overview — GTK4 fullscreen workspace overview overlay.
+
+Shows a 2D grid of all projects (rows) and workspaces (columns) with
+screenshot thumbnails for the active workspace and synthetic previews
+for occupied workspaces. Click a cell to switch, Escape to close.
+"""
+
+import ctypes
+import ctypes.util
+
+# gtk4-layer-shell must be loaded before libwayland-client
+_lib = ctypes.util.find_library("gtk4-layer-shell")
+if _lib:
+    ctypes.CDLL(_lib, mode=ctypes.RTLD_GLOBAL)
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk4LayerShell", "1.0")
+
+from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell
+import json
+import os
+import signal
+import subprocess
+import sys
+
+# ── Config ──────────────────────────────────────────────────────────────────
+
+CONFIG_DIR = os.path.expanduser("~/.config/hyprcomp")
+PROJECTS_FILE = os.path.join(CONFIG_DIR, "projects")
+STATE_FILE = os.path.join(CONFIG_DIR, "state")
+CACHE_DIR = os.path.expanduser("~/.cache/hyprcomp/thumbs")
+HYPRCOMP_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hyprcomp")
+
+CELL_W, CELL_H = 240, 135
+CELL_GAP = 8
+ROW_GAP = 12
+LABEL_W = 150
+
+# Catppuccin Mocha palette
+C = {
+    "base": (0.118, 0.118, 0.180),
+    "surface0": (0.192, 0.196, 0.267),
+    "surface1": (0.271, 0.278, 0.353),
+    "surface2": (0.345, 0.357, 0.439),
+    "overlay0": (0.424, 0.439, 0.537),
+    "text": (0.804, 0.839, 0.957),
+    "subtext0": (0.651, 0.678, 0.784),
+    "blue": (0.537, 0.706, 0.980),
+    "teal": (0.580, 0.886, 0.835),
+    "green": (0.651, 0.890, 0.631),
+    "red": (0.953, 0.545, 0.659),
+    "mauve": (0.796, 0.651, 0.969),
+    "peach": (0.980, 0.702, 0.529),
+    "lavender": (0.702, 0.718, 0.969),
+}
+
+WIN_COLORS = [C["blue"], C["teal"], C["green"], C["mauve"], C["peach"], C["lavender"]]
+
+# ── Data layer ──────────────────────────────────────────────────────────────
+
+
+def hyprctl_json(cmd):
+    return json.loads(subprocess.check_output(["hyprctl", cmd, "-j"]))
+
+
+def load_projects():
+    projects = {}
+    if os.path.isfile(PROJECTS_FILE):
+        with open(PROJECTS_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if ":" in line:
+                    row_s, name = line.split(":", 1)
+                    projects[int(row_s)] = name
+    return projects
+
+
+def load_grid_data():
+    projects = load_projects()
+    active_ws = hyprctl_json("activeworkspace")
+    active_ws_id = active_ws["id"]
+    clients = hyprctl_json("clients")
+    monitors = hyprctl_json("monitors")
+
+    # Group clients by workspace
+    ws_clients = {}
+    for c in clients:
+        ws_id = c["workspace"]["id"]
+        if ws_id > 0:
+            ws_clients.setdefault(ws_id, []).append(c)
+
+    # Monitor info by name
+    mon_info = {}
+    for m in monitors:
+        mon_info[m["name"]] = {
+            "x": m["x"],
+            "y": m["y"],
+            "width": m["width"],
+            "height": m["height"],
+        }
+
+    # Workspace → monitor mapping
+    ws_mon = {}
+    try:
+        workspaces = hyprctl_json("workspaces")
+        for ws in workspaces:
+            mon_name = ws.get("monitor", "") or ws.get("lastmonitor", "")
+            if mon_name in mon_info:
+                ws_mon[ws["id"]] = mon_info[mon_name]
+    except Exception:
+        pass
+
+    # Primary (focused) monitor
+    primary_mon = None
+    for m in monitors:
+        if m.get("focused"):
+            primary_mon = mon_info[m["name"]]
+            break
+    if primary_mon is None and monitors:
+        primary_mon = mon_info[monitors[0]["name"]]
+
+    return projects, active_ws_id, ws_clients, ws_mon, primary_mon
+
+
+def capture_active_screenshot():
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    path = os.path.join(CACHE_DIR, "active.jpg")
+    try:
+        active = hyprctl_json("activeworkspace")
+        monitor = active.get("monitor", "")
+        cmd = ["grim", "-t", "jpeg", "-q", "50", "-s", "0.25"]
+        if monitor:
+            cmd.extend(["-o", monitor])
+        cmd.append(path)
+        subprocess.run(cmd, capture_output=True, timeout=5)
+        if os.path.isfile(path):
+            return path
+    except Exception:
+        pass
+    return None
+
+
+# ── Workspace math ──────────────────────────────────────────────────────────
+
+
+def ws_to_row(ws_id):
+    return (ws_id - 1) // 10
+
+
+def ws_to_col(ws_id):
+    col = ws_id % 10
+    return col if col != 0 else 10
+
+
+def row_col_to_ws(row, col):
+    return row * 10 + col
+
+
+# ── Drawing ─────────────────────────────────────────────────────────────────
+
+
+def make_synthetic_draw(windows, mon):
+    """Return a draw func for a synthetic workspace preview."""
+
+    def draw(da, cr, width, height, *_args):
+        cr.set_source_rgb(*C["surface0"])
+        cr.rectangle(0, 0, width, height)
+        cr.fill()
+
+        if not mon or not windows:
+            return
+
+        mon_w, mon_h = mon["width"], mon["height"]
+        mon_x, mon_y = mon["x"], mon["y"]
+        sx = width / mon_w
+        sy = height / mon_h
+
+        for i, w in enumerate(windows):
+            wx, wy = w["at"]
+            ww, wh = w["size"]
+            wx -= mon_x
+            wy -= mon_y
+            rx, ry = wx * sx, wy * sy
+            rw, rh = max(ww * sx, 4), max(wh * sy, 4)
+
+            color = WIN_COLORS[i % len(WIN_COLORS)]
+            cr.set_source_rgba(*color, 0.3)
+            cr.rectangle(rx, ry, rw, rh)
+            cr.fill()
+            cr.set_source_rgba(*color, 0.8)
+            cr.set_line_width(1.5)
+            cr.rectangle(rx, ry, rw, rh)
+            cr.stroke()
+
+    return draw
+
+
+def draw_empty(da, cr, width, height, *_args):
+    """Dim dashed placeholder for empty workspace."""
+    cr.set_source_rgb(*C["surface0"])
+    cr.rectangle(0, 0, width, height)
+    cr.fill()
+
+    cr.set_source_rgba(*C["overlay0"], 0.4)
+    cr.set_dash([6, 4])
+    cr.set_line_width(1)
+    m = 4
+    cr.rectangle(m, m, width - 2 * m, height - 2 * m)
+    cr.stroke()
+
+
+# ── CSS ─────────────────────────────────────────────────────────────────────
+
+CSS = f"""
+window {{
+    background-color: rgba(0, 0, 0, 0.75);
+}}
+.overview-box {{
+    padding: 40px;
+}}
+.project-label {{
+    color: #cdd6f4;
+    font-size: 14px;
+    font-weight: bold;
+    min-width: {LABEL_W}px;
+    padding-right: 16px;
+}}
+.project-label-active {{
+    color: #89b4fa;
+}}
+.ws-cell {{
+    all: unset;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    min-width: {CELL_W}px;
+    min-height: {CELL_H}px;
+}}
+.ws-cell:hover {{
+    border-color: rgba(137, 180, 250, 0.5);
+}}
+.ws-cell-active {{
+    border-color: #89b4fa;
+}}
+.col-label {{
+    color: #6c7086;
+    font-size: 11px;
+    min-height: 20px;
+}}
+.col-label-active {{
+    color: #89b4fa;
+}}
+.del-btn {{
+    all: unset;
+    color: #6c7086;
+    padding: 4px 8px;
+    font-size: 16px;
+    border-radius: 6px;
+}}
+.del-btn:hover {{
+    color: #f38ba8;
+    background: rgba(243, 139, 168, 0.1);
+}}
+.new-btn {{
+    all: unset;
+    color: #6c7086;
+    background: rgba(49, 50, 68, 0.5);
+    border: 1px dashed rgba(108, 112, 134, 0.4);
+    padding: 8px 20px;
+    font-size: 13px;
+    border-radius: 8px;
+    margin-top: 12px;
+}}
+.new-btn:hover {{
+    color: #a6e3a1;
+    border-color: rgba(166, 227, 161, 0.4);
+    background: rgba(166, 227, 161, 0.05);
+}}
+.project-entry {{
+    color: #cdd6f4;
+    background: #313244;
+    border: 1px solid #89b4fa;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 14px;
+    min-width: 200px;
+    caret-color: #89b4fa;
+}}
+.confirm-box {{
+    background: rgba(49, 50, 68, 0.9);
+    border-radius: 8px;
+    padding: 8px 12px;
+}}
+.confirm-label {{
+    color: #f38ba8;
+    font-size: 13px;
+    padding-right: 8px;
+}}
+.confirm-yes {{
+    all: unset;
+    color: #f38ba8;
+    background: rgba(243, 139, 168, 0.15);
+    border: 1px solid rgba(243, 139, 168, 0.3);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    margin-right: 4px;
+}}
+.confirm-no {{
+    all: unset;
+    color: #a6adc8;
+    background: rgba(49, 50, 68, 0.8);
+    border: 1px solid rgba(108, 112, 134, 0.3);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+}}
+"""
+
+
+# ── Application ─────────────────────────────────────────────────────────────
+
+
+class OverviewApp(Gtk.Application):
+    def __init__(self, screenshot_path):
+        super().__init__(application_id="com.hyprcomp.overview")
+        self.screenshot_path = screenshot_path
+        self.screenshot_texture = None
+        self.creating_project = False
+
+    def do_activate(self):
+        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
+            load_grid_data()
+        )
+        self.active_row = ws_to_row(self.active_ws_id)
+        self.active_col = ws_to_col(self.active_ws_id)
+
+        if self.screenshot_path and os.path.isfile(self.screenshot_path):
+            try:
+                self.screenshot_texture = Gdk.Texture.new_from_filename(
+                    self.screenshot_path
+                )
+            except Exception:
+                pass
+
+        # Window
+        self.win = Gtk.ApplicationWindow(application=self)
+        Gtk4LayerShell.init_for_window(self.win)
+        Gtk4LayerShell.set_layer(self.win, Gtk4LayerShell.Layer.OVERLAY)
+        for edge in (
+            Gtk4LayerShell.Edge.TOP,
+            Gtk4LayerShell.Edge.BOTTOM,
+            Gtk4LayerShell.Edge.LEFT,
+            Gtk4LayerShell.Edge.RIGHT,
+        ):
+            Gtk4LayerShell.set_anchor(self.win, edge, True)
+        Gtk4LayerShell.set_keyboard_mode(
+            self.win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE
+        )
+        Gtk4LayerShell.set_namespace(self.win, "hyprcomp-overview")
+
+        # CSS
+        css = Gtk.CssProvider()
+        css.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        # Escape key
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.connect("key-pressed", self._on_key)
+        self.win.add_controller(key_ctrl)
+
+        self._build_grid()
+        self.win.present()
+
+    # ── Grid building ───────────────────────────────────────────────────────
+
+    def _build_grid(self):
+        outer = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+        )
+        outer.add_css_class("overview-box")
+
+        # Determine max column to show
+        max_col = 3
+        for row in self.projects:
+            for col in range(1, 11):
+                if row_col_to_ws(row, col) in self.ws_clients:
+                    max_col = max(max_col, col)
+            if row == self.active_row:
+                max_col = max(max_col, self.active_col)
+        max_col = min(max_col + 1, 10)
+        self.max_col = max_col
+
+        # Column headers
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=CELL_GAP)
+        spacer = Gtk.Label(label="")
+        spacer.set_size_request(LABEL_W, -1)
+        header.append(spacer)
+        for col in range(1, max_col + 1):
+            lbl = Gtk.Label(label=str(col))
+            lbl.set_size_request(CELL_W, 20)
+            lbl.add_css_class("col-label")
+            if col == self.active_col and self.active_row in self.projects:
+                lbl.add_css_class("col-label-active")
+            header.append(lbl)
+        del_spacer = Gtk.Label(label="")
+        del_spacer.set_size_request(40, -1)
+        header.append(del_spacer)
+        outer.append(header)
+
+        # Project rows
+        for row in sorted(self.projects):
+            name = self.projects[row]
+            is_active = row == self.active_row
+
+            row_box = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL,
+                spacing=CELL_GAP,
+                valign=Gtk.Align.CENTER,
+            )
+            row_box.set_margin_top(ROW_GAP)
+
+            # Label
+            label = Gtk.Label(label=name, xalign=1.0)
+            label.set_size_request(LABEL_W, -1)
+            label.set_ellipsize(3)  # END
+            label.add_css_class("project-label")
+            if is_active:
+                label.add_css_class("project-label-active")
+            row_box.append(label)
+
+            # Workspace cells
+            for col in range(1, max_col + 1):
+                ws = row_col_to_ws(row, col)
+                is_ws_active = ws == self.active_ws_id
+                has_windows = ws in self.ws_clients
+
+                btn = Gtk.Button()
+                btn.add_css_class("ws-cell")
+                if is_ws_active:
+                    btn.add_css_class("ws-cell-active")
+                btn.set_size_request(CELL_W, CELL_H)
+                btn.set_overflow(Gtk.Overflow.HIDDEN)
+
+                if is_ws_active and self.screenshot_texture:
+                    pic = Gtk.Picture.new_for_paintable(self.screenshot_texture)
+                    pic.set_size_request(CELL_W, CELL_H)
+                    pic.set_content_fit(Gtk.ContentFit.COVER)
+                    btn.set_child(pic)
+                elif has_windows:
+                    da = Gtk.DrawingArea()
+                    da.set_size_request(CELL_W, CELL_H)
+                    mon = self.ws_mon.get(ws, self.primary_mon)
+                    da.set_draw_func(make_synthetic_draw(self.ws_clients[ws], mon))
+                    btn.set_child(da)
+                else:
+                    da = Gtk.DrawingArea()
+                    da.set_size_request(CELL_W, CELL_H)
+                    da.set_draw_func(draw_empty)
+                    btn.set_child(da)
+
+                btn.connect("clicked", self._on_cell_click, ws)
+                row_box.append(btn)
+
+            # Delete button
+            del_btn = Gtk.Button(label="\u00d7")
+            del_btn.add_css_class("del-btn")
+            del_btn.set_valign(Gtk.Align.CENTER)
+            del_btn.connect("clicked", self._on_delete_click, row, name, row_box)
+            row_box.append(del_btn)
+
+            outer.append(row_box)
+
+        # "+ New Project" button
+        self.new_btn = Gtk.Button(label="+ New Project")
+        self.new_btn.add_css_class("new-btn")
+        self.new_btn.set_halign(Gtk.Align.CENTER)
+        self.new_btn.set_margin_top(20)
+        self.new_btn.connect("clicked", self._on_new_project)
+        outer.append(self.new_btn)
+
+        self.win.set_child(outer)
+
+    # ── Event handlers ──────────────────────────────────────────────────────
+
+    def _on_key(self, _ctrl, keyval, _keycode, _state):
+        if keyval == Gdk.KEY_Escape:
+            self.quit()
+            return True
+        return False
+
+    def _on_cell_click(self, _btn, ws_id):
+        row = ws_to_row(ws_id)
+        try:
+            with open(STATE_FILE, "w") as f:
+                f.write(f"current_row={row}\n")
+        except Exception:
+            pass
+        subprocess.Popen(
+            ["hyprctl", "dispatch", "workspace", str(ws_id)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.Popen(
+            ["pkill", "-SIGRTMIN+10", "waybar"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self.quit()
+
+    def _on_delete_click(self, btn, row, name, row_box):
+        parent = btn.get_parent()
+        parent.remove(btn)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.add_css_class("confirm-box")
+        box.set_valign(Gtk.Align.CENTER)
+
+        lbl = Gtk.Label(label=f"Delete {name}?")
+        lbl.add_css_class("confirm-label")
+        box.append(lbl)
+
+        yes = Gtk.Button(label="Yes")
+        yes.add_css_class("confirm-yes")
+        yes.connect("clicked", self._do_delete, row)
+        box.append(yes)
+
+        no = Gtk.Button(label="No")
+        no.add_css_class("confirm-no")
+        no.connect("clicked", self._cancel_delete, box, row, name, row_box)
+        box.append(no)
+
+        parent.append(box)
+
+    def _cancel_delete(self, _no_btn, confirm_box, row, name, row_box):
+        parent = confirm_box.get_parent()
+        parent.remove(confirm_box)
+        del_btn = Gtk.Button(label="\u00d7")
+        del_btn.add_css_class("del-btn")
+        del_btn.set_valign(Gtk.Align.CENTER)
+        del_btn.connect("clicked", self._on_delete_click, row, name, row_box)
+        parent.append(del_btn)
+
+    def _do_delete(self, _btn, row):
+        # Close all windows in this row
+        for col in range(1, 11):
+            ws = row_col_to_ws(row, col)
+            for client in self.ws_clients.get(ws, []):
+                addr = client.get("address", "")
+                if addr:
+                    subprocess.run(
+                        ["hyprctl", "dispatch", "closewindow", f"address:{addr}"],
+                        capture_output=True,
+                    )
+
+        subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
+
+        # Rebuild
+        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
+            load_grid_data()
+        )
+        self.active_row = ws_to_row(self.active_ws_id)
+        self.active_col = ws_to_col(self.active_ws_id)
+        self._build_grid()
+
+    def _on_new_project(self, _btn):
+        if self.creating_project:
+            return
+        self.creating_project = True
+
+        parent = self.new_btn.get_parent()
+        parent.remove(self.new_btn)
+
+        entry_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=8,
+            halign=Gtk.Align.CENTER,
+        )
+        entry_box.set_margin_top(20)
+
+        entry = Gtk.Entry()
+        entry.set_placeholder_text("Project name...")
+        entry.add_css_class("project-entry")
+        entry.connect("activate", self._do_create, entry_box)
+
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.connect("key-pressed", self._on_entry_key, entry_box)
+        entry.add_controller(key_ctrl)
+
+        entry_box.append(entry)
+        parent.append(entry_box)
+        entry.grab_focus()
+
+    def _on_entry_key(self, _ctrl, keyval, _keycode, _state, entry_box):
+        if keyval == Gdk.KEY_Escape:
+            self._cancel_create(entry_box)
+            return True
+        return False
+
+    def _cancel_create(self, entry_box):
+        parent = entry_box.get_parent()
+        parent.remove(entry_box)
+        self.creating_project = False
+        parent.append(self.new_btn)
+
+    def _do_create(self, entry, entry_box):
+        name = entry.get_text().strip()
+        if not name:
+            return
+
+        subprocess.run([HYPRCOMP_BIN, "create", name], capture_output=True)
+        self.creating_project = False
+
+        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
+            load_grid_data()
+        )
+        self.active_row = ws_to_row(self.active_ws_id)
+        self.active_col = ws_to_col(self.active_ws_id)
+        self._build_grid()
+
+
+# ── Main ────────────────────────────────────────────────────────────────────
+
+
+def main():
+    screenshot = capture_active_screenshot()
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+    app = OverviewApp(screenshot)
+    app.run([])
+
+
+if __name__ == "__main__":
+    main()

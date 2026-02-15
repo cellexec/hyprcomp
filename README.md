@@ -20,6 +20,7 @@ Project C:       ws 21         ws 22         ws 23
 - **SUPER+SHIFT+1-9** - move window to column N of current row
 - **Directional animations** - horizontal slide for column switches, vertical slide for project switches
 - **Waybar integration** - project name + row-aware workspace buttons with click support
+- **Workspace overview** - fullscreen overlay showing all projects and workspaces in a 2D grid (SUPER+Tab)
 - **Persistent state** - project names survive reboots
 
 ## Dependencies
@@ -27,6 +28,8 @@ Project C:       ws 21         ws 22         ws 23
 - Hyprland
 - jq
 - waybar (optional, for bar integration)
+- Python 3 with PyGObject, gtk4-layer-shell (optional, for workspace overview)
+- grim (optional, for workspace screenshots in overview)
 
 ## Installation
 
@@ -118,6 +121,7 @@ hyprcomp create cooking-book   # Row 2, workspaces 21-30
 | Previous project (up) | 3-finger swipe down | SUPER+CTRL+UP |
 | Move window to column N | | SUPER+SHIFT+N |
 | Jump to column N | | SUPER+N |
+| Workspace overview | | SUPER+Tab |
 
 ### Manage projects
 
@@ -126,6 +130,7 @@ hyprcomp list              # Show all projects (* marks current)
 hyprcomp status            # Current workspace, row, and column
 hyprcomp rename new-name   # Rename current project
 hyprcomp delete            # Remove current project registration
+hyprcomp overview          # Toggle workspace overview overlay
 ```
 
 ## How it works
