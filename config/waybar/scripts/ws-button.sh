@@ -14,5 +14,5 @@ if [[ "$ws" -eq "$active_ws" ]]; then
 elif [[ "$has_windows" -gt 0 ]]; then
     echo "{\"text\": \"$COL\", \"class\": \"occupied\"}"
 else
-    echo "{\"text\": \"$COL\", \"class\": \"empty-ws\"}"
+    echo "{\"text\": \"\", \"class\": \"empty-ws\"}"
 fi

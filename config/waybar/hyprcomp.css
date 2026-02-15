@@ -48,7 +48,7 @@
   border-bottom: 2px solid rgba(137, 220, 235, 0.4);
 }
 
-/* Empty workspaces */
+/* Empty workspaces - fully hidden */
 #custom-ws-1.empty-ws,
 #custom-ws-2.empty-ws,
 #custom-ws-3.empty-ws,
@@ -58,8 +58,11 @@
 #custom-ws-7.empty-ws,
 #custom-ws-8.empty-ws,
 #custom-ws-9.empty-ws {
-  color: @surface1;
-  border-bottom: 2px solid transparent;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  border: none;
+  border-bottom: none;
 }
 
 /* Active workspace */
