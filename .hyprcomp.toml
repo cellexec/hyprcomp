@@ -1,0 +1,7 @@
+[[windows]]
+exec = "claude --dangerously-skip-permissions"
+terminal = true
+
+[[windows]]
+exec = "lazygit"
+terminal = true
