@@ -939,8 +939,9 @@ class OverviewApp(Gtk.Application):
         except Exception:
             pass
 
-        # Launch apps on specific workspaces
-        hyprctl_dispatch(f"exec [workspace {ws1} silent] alacritty --working-directory {project_dir} -e claude")
+        # Launch apps on specific workspaces (use full path for claude)
+        claude_bin = os.path.expanduser("~/.local/bin/claude")
+        hyprctl_dispatch(f"exec [workspace {ws1} silent] alacritty --working-directory {project_dir} -e {claude_bin}")
         hyprctl_dispatch(f"exec [workspace {ws2} silent] chromium")
         hyprctl_dispatch(f"exec [workspace {ws3} silent] alacritty --working-directory {project_dir} -e nvim")
 
