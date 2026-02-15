@@ -1,0 +1,381 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_DIR="$HOME/.config/hyprcomp"
+STATE_FILE="$CONFIG_DIR/state"
+PROJECTS_FILE="$CONFIG_DIR/projects"
+
+mkdir -p "$CONFIG_DIR"
+
+# --- Helpers ---
+
+get_active_workspace() {
+    hyprctl activeworkspace -j | jq -r '.id'
+}
+
+workspace_to_row() {
+    echo $(( ($1 - 1) / 10 ))
+}
+
+workspace_to_col() {
+    local col=$(( $1 % 10 ))
+    [[ $col -eq 0 ]] && col=10
+    echo "$col"
+}
+
+row_col_to_workspace() {
+    echo $(( $1 * 10 + $2 ))
+}
+
+sync_state() {
+    local ws
+    ws=$(get_active_workspace)
+    local row
+    row=$(workspace_to_row "$ws")
+    echo "current_row=$row" > "$STATE_FILE"
+}
+
+get_current_row() {
+    if [[ -f "$STATE_FILE" ]]; then
+        source "$STATE_FILE"
+        echo "${current_row:-0}"
+    else
+        echo 0
+    fi
+}
+
+get_max_row() {
+    if [[ ! -f "$PROJECTS_FILE" ]] || [[ ! -s "$PROJECTS_FILE" ]]; then
+        echo -1
+        return
+    fi
+    awk -F: '{print $1}' "$PROJECTS_FILE" | sort -n | tail -1
+}
+
+get_project_name() {
+    local row=$1
+    if [[ -f "$PROJECTS_FILE" ]]; then
+        grep "^${row}:" "$PROJECTS_FILE" 2>/dev/null | cut -d: -f2- || echo ""
+    fi
+}
+
+row_exists() {
+    local row=$1
+    [[ -f "$PROJECTS_FILE" ]] && grep -q "^${row}:" "$PROJECTS_FILE"
+}
+
+next_free_row() {
+    if [[ ! -f "$PROJECTS_FILE" ]] || [[ ! -s "$PROJECTS_FILE" ]]; then
+        echo 0
+        return
+    fi
+    local max
+    max=$(get_max_row)
+    echo $(( max + 1 ))
+}
+
+workspace_has_windows() {
+    local ws=$1
+    local count
+    count=$(hyprctl clients -j | jq --argjson ws "$ws" '[.[] | select(.workspace.id == $ws)] | length')
+    [[ "$count" -gt 0 ]]
+}
+
+get_highest_occupied_col() {
+    local row=$1
+    local start_ws=$((row * 10 + 1))
+    local end_ws=$((row * 10 + 10))
+    local highest
+    highest=$(hyprctl clients -j | jq --argjson s "$start_ws" --argjson e "$end_ws" \
+        '[.[] | select(.workspace.id >= $s and .workspace.id <= $e) | .workspace.id] | if length == 0 then 0 else max end')
+    if [[ "$highest" -gt 0 ]]; then
+        workspace_to_col "$highest"
+    else
+        echo 0
+    fi
+}
+
+set_animation() {
+    hyprctl keyword animation "workspaces, 1, 3, default, $1" > /dev/null
+}
+
+# --- Commands ---
+
+cmd_up() {
+    sync_state
+    local ws row col target_row
+    ws=$(get_active_workspace)
+    row=$(workspace_to_row "$ws")
+    col=$(workspace_to_col "$ws")
+
+    if [[ $row -le 0 ]]; then
+        echo "Already at the top row"
+        return 1
+    fi
+
+    # Find the nearest existing row above
+    target_row=$((row - 1))
+    while [[ $target_row -ge 0 ]]; do
+        if row_exists "$target_row"; then
+            break
+        fi
+        target_row=$((target_row - 1))
+    done
+
+    if [[ $target_row -lt 0 ]]; then
+        echo "No project row above"
+        return 1
+    fi
+
+    # Clamp column to highest occupied in target row
+    local highest_col
+    highest_col=$(get_highest_occupied_col "$target_row")
+    if [[ $highest_col -gt 0 ]] && [[ $col -gt $highest_col ]]; then
+        col=$highest_col
+    fi
+
+    local target_ws
+    target_ws=$(row_col_to_workspace "$target_row" "$col")
+    echo "current_row=$target_row" > "$STATE_FILE"
+    set_animation slidevert
+    hyprctl dispatch workspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+    local name
+    name=$(get_project_name "$target_row")
+    echo "Switched to row $target_row ($name) workspace $target_ws"
+}
+
+cmd_down() {
+    sync_state
+    local ws row col target_row max_row
+    ws=$(get_active_workspace)
+    row=$(workspace_to_row "$ws")
+    col=$(workspace_to_col "$ws")
+    max_row=$(get_max_row)
+
+    if [[ $max_row -lt 0 ]]; then
+        echo "No projects registered"
+        return 1
+    fi
+
+    # Find the nearest existing row below
+    target_row=$((row + 1))
+    while [[ $target_row -le $max_row ]]; do
+        if row_exists "$target_row"; then
+            break
+        fi
+        target_row=$((target_row + 1))
+    done
+
+    if [[ $target_row -gt $max_row ]]; then
+        echo "Already at the bottom row"
+        return 1
+    fi
+
+    # Clamp column to highest occupied in target row
+    local highest_col
+    highest_col=$(get_highest_occupied_col "$target_row")
+    if [[ $highest_col -gt 0 ]] && [[ $col -gt $highest_col ]]; then
+        col=$highest_col
+    fi
+
+    local target_ws
+    target_ws=$(row_col_to_workspace "$target_row" "$col")
+    echo "current_row=$target_row" > "$STATE_FILE"
+    set_animation slidevert
+    hyprctl dispatch workspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+    local name
+    name=$(get_project_name "$target_row")
+    echo "Switched to row $target_row ($name) workspace $target_ws"
+}
+
+cmd_left() {
+    sync_state
+    local ws row col
+    ws=$(get_active_workspace)
+    row=$(workspace_to_row "$ws")
+    col=$(workspace_to_col "$ws")
+
+    if [[ $col -le 1 ]]; then
+        return 0
+    fi
+
+    local target_ws
+    target_ws=$(row_col_to_workspace "$row" $((col - 1)))
+    set_animation slide
+    hyprctl dispatch workspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+}
+
+cmd_right() {
+    sync_state
+    local ws row col
+    ws=$(get_active_workspace)
+    row=$(workspace_to_row "$ws")
+    col=$(workspace_to_col "$ws")
+
+    if [[ $col -ge 10 ]]; then
+        return 0
+    fi
+
+    local target_ws
+    target_ws=$(row_col_to_workspace "$row" $((col + 1)))
+
+    # Only create a new empty workspace if the current one is also empty
+    if ! workspace_has_windows "$target_ws" && workspace_has_windows "$ws"; then
+        return 0
+    fi
+
+    set_animation slide
+    hyprctl dispatch workspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+}
+
+cmd_go() {
+    local col=${1:?Usage: hyprcomp go <column 1-10>}
+    if [[ $col -lt 1 || $col -gt 10 ]]; then
+        echo "Column must be 1-10"
+        return 1
+    fi
+
+    sync_state
+    local row
+    row=$(get_current_row)
+    local target_ws
+    target_ws=$(row_col_to_workspace "$row" "$col")
+    set_animation slide
+    hyprctl dispatch workspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+}
+
+cmd_move() {
+    local col=${1:?Usage: hyprcomp move <column 1-10>}
+    if [[ $col -lt 1 || $col -gt 10 ]]; then
+        echo "Column must be 1-10"
+        return 1
+    fi
+
+    sync_state
+    local row
+    row=$(get_current_row)
+    local target_ws
+    target_ws=$(row_col_to_workspace "$row" "$col")
+    hyprctl dispatch movetoworkspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+}
+
+cmd_status() {
+    sync_state
+    local ws row col name
+    ws=$(get_active_workspace)
+    row=$(workspace_to_row "$ws")
+    col=$(workspace_to_col "$ws")
+    name=$(get_project_name "$row")
+
+    echo "Workspace: $ws"
+    echo "Row: $row${name:+ ($name)}"
+    echo "Column: $col"
+}
+
+cmd_list() {
+    if [[ ! -f "$PROJECTS_FILE" ]] || [[ ! -s "$PROJECTS_FILE" ]]; then
+        echo "No projects registered. Use 'hyprcomp create <name>' to add one."
+        return
+    fi
+
+    sync_state
+    local current_row
+    current_row=$(get_current_row)
+
+    while IFS=: read -r row name; do
+        local marker=" "
+        [[ $row -eq $current_row ]] && marker="*"
+        printf "%s Row %d: %s (workspaces %d-%d)\n" "$marker" "$row" "$name" \
+            "$(row_col_to_workspace "$row" 1)" "$(row_col_to_workspace "$row" 10)"
+    done < "$PROJECTS_FILE"
+}
+
+cmd_create() {
+    local name=${1:?Usage: hyprcomp create <name>}
+    local row
+    row=$(next_free_row)
+
+    if [[ $row -ge 9 ]]; then
+        echo "Maximum 9 project rows (0-8) reached"
+        return 1
+    fi
+
+    echo "${row}:${name}" >> "$PROJECTS_FILE"
+    echo "Created project '$name' at row $row (workspaces $(row_col_to_workspace "$row" 1)-$(row_col_to_workspace "$row" 10))"
+}
+
+cmd_rename() {
+    local name=${1:?Usage: hyprcomp rename <name>}
+    sync_state
+    local row
+    row=$(get_current_row)
+
+    if ! row_exists "$row"; then
+        echo "Current row $row is not a registered project"
+        return 1
+    fi
+
+    sed -i "s/^${row}:.*/${row}:${name}/" "$PROJECTS_FILE"
+    echo "Renamed row $row to '$name'"
+}
+
+cmd_delete() {
+    sync_state
+    local row name
+    row=$(get_current_row)
+    name=$(get_project_name "$row")
+
+    if ! row_exists "$row"; then
+        echo "Current row $row is not a registered project"
+        return 1
+    fi
+
+    sed -i "/^${row}:/d" "$PROJECTS_FILE"
+    echo "Deleted project '$name' (row $row)"
+}
+
+# --- Main ---
+
+cmd=${1:-help}
+shift || true
+
+case "$cmd" in
+    up)     cmd_up ;;
+    down)   cmd_down ;;
+    left)   cmd_left ;;
+    right)  cmd_right ;;
+    go)     cmd_go "$@" ;;
+    move)   cmd_move "$@" ;;
+    status) cmd_status ;;
+    list)   cmd_list ;;
+    create) cmd_create "$@" ;;
+    rename) cmd_rename "$@" ;;
+    delete) cmd_delete ;;
+    help)
+        echo "Usage: hyprcomp <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  up              Switch to same column in previous project row"
+        echo "  down            Switch to same column in next project row"
+        echo "  left            Move one column left (row-bounded)"
+        echo "  right           Move one column right (row-bounded)"
+        echo "  go <col>        Switch to column 1-10 of current project row"
+        echo "  move <col>      Move active window to column 1-10 of current row"
+        echo "  status          Show current project, row, and column"
+        echo "  list            List all registered projects"
+        echo "  create <name>   Register a new project row"
+        echo "  rename <name>   Rename current project row"
+        echo "  delete          Unregister current project row"
+        ;;
+    *)
+        echo "Unknown command: $cmd"
+        echo "Run 'hyprcomp help' for usage"
+        exit 1
+        ;;
+esac
