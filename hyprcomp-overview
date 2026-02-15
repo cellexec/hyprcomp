@@ -754,6 +754,10 @@ class OverviewApp(Gtk.Application):
             self._new_workspace_in_row(self.hovered_row)
             return True
 
+        if keyval == Gdk.KEY_x and self.hovered_row is not None:
+            self._delete_project_row(self.hovered_row)
+            return True
+
         return False
 
     def _close_overlay(self):
@@ -846,7 +850,8 @@ class OverviewApp(Gtk.Application):
         del_btn.connect("clicked", self._on_delete_click, row, name, row_box)
         parent.append(del_btn)
 
-    def _do_delete(self, _btn, row):
+    def _delete_project_row(self, row):
+        """Close all windows in a project row, delete it, and reload."""
         for col in range(1, 11):
             ws = row_col_to_ws(row, col)
             for client in self.ws_clients.get(ws, []):
@@ -858,6 +863,9 @@ class OverviewApp(Gtk.Application):
                     )
         subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
         self._reload_grid()
+
+    def _do_delete(self, _btn, row):
+        self._delete_project_row(row)
 
     def _on_new_project(self, _btn):
         if self.creating_project:
