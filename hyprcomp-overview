@@ -473,15 +473,44 @@ class OverviewApp(Gtk.Application):
         """Update active highlight when workspace changes via gesture."""
         if ws_id == self.active_ws_id:
             return False
+
+        old_ws = self.active_ws_id
+        old_row = self.active_row
+        old_col = self.active_col
+
         self.active_ws_id = ws_id
         self.active_row = ws_to_row(ws_id)
         self.active_col = ws_to_col(ws_id)
-        self._build_grid()
+
+        # Toggle cell active border
+        if old_ws in self._cells:
+            self._cells[old_ws].remove_css_class("ws-cell-active")
+        if ws_id in self._cells:
+            self._cells[ws_id].add_css_class("ws-cell-active")
+
+        # Toggle project label highlight
+        if old_row != self.active_row:
+            if old_row in self._row_labels:
+                self._row_labels[old_row].remove_css_class("project-label-active")
+            if self.active_row in self._row_labels:
+                self._row_labels[self.active_row].add_css_class("project-label-active")
+
+        # Toggle column header highlight
+        if old_col != self.active_col:
+            if old_col in self._col_labels:
+                self._col_labels[old_col].remove_css_class("col-label-active")
+            if self.active_col in self._col_labels:
+                self._col_labels[self.active_col].add_css_class("col-label-active")
+
         return False
 
     # ── Grid building ───────────────────────────────────────────────────────
 
     def _build_grid(self):
+        self._cells = {}
+        self._row_labels = {}
+        self._col_labels = {}
+
         outer = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
             halign=Gtk.Align.CENTER,
@@ -489,28 +518,31 @@ class OverviewApp(Gtk.Application):
         )
         outer.add_css_class("overview-box")
 
-        # Determine max column to show
-        max_col = 3
+        # Per-row max column (highest occupied or active)
+        row_max = {}
         for row in self.projects:
+            m = 0
             for col in range(1, 11):
                 if row_col_to_ws(row, col) in self.ws_clients:
-                    max_col = max(max_col, col)
+                    m = col
             if row == self.active_row:
-                max_col = max(max_col, self.active_col)
-        max_col = min(max_col + 1, 10)
-        self.max_col = max_col
+                m = max(m, self.active_col)
+            row_max[row] = max(m, 1)
+
+        global_max = max(row_max.values()) if row_max else 1
 
         # Column headers
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=CELL_GAP)
         spacer = Gtk.Label(label="")
         spacer.set_size_request(LABEL_W, -1)
         header.append(spacer)
-        for col in range(1, max_col + 1):
+        for col in range(1, global_max + 1):
             lbl = Gtk.Label(label=str(col))
             lbl.set_size_request(CELL_W, 20)
             lbl.add_css_class("col-label")
             if col == self.active_col and self.active_row in self.projects:
                 lbl.add_css_class("col-label-active")
+            self._col_labels[col] = lbl
             header.append(lbl)
         del_spacer = Gtk.Label(label="")
         del_spacer.set_size_request(40, -1)
@@ -536,10 +568,11 @@ class OverviewApp(Gtk.Application):
             label.add_css_class("project-label")
             if is_active:
                 label.add_css_class("project-label-active")
+            self._row_labels[row] = label
             row_box.append(label)
 
-            # Workspace cells
-            for col in range(1, max_col + 1):
+            # Workspace cells — only up to this row's max occupied column
+            for col in range(1, row_max[row] + 1):
                 ws = row_col_to_ws(row, col)
                 is_ws_active = ws == self.active_ws_id
                 has_windows = ws in self.ws_clients
@@ -571,6 +604,7 @@ class OverviewApp(Gtk.Application):
                     btn.set_child(da)
 
                 btn.connect("clicked", self._on_cell_click, ws)
+                self._cells[ws] = btn
 
                 # Hover tracking for keyboard shortcuts
                 motion = Gtk.EventControllerMotion()
