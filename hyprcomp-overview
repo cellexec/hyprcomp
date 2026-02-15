@@ -39,6 +39,8 @@ STATE_FILE = os.path.join(CONFIG_DIR, "state")
 CACHE_DIR = os.path.expanduser("~/.cache/hyprcomp/thumbs")
 HYPRCOMP_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hyprcomp")
 
+PROJECTS_DIR = os.path.expanduser("~/projects")
+
 CELL_W, CELL_H = 240, 135
 CELL_GAP = 8
 ROW_GAP = 12
@@ -78,11 +80,11 @@ def _get_sock_path():
     return _HYPR_SOCK
 
 
-def hyprctl_json(cmd):
-    """Query Hyprland via IPC socket (no subprocess)."""
+def _hypr_request(msg):
+    """Send a raw request to Hyprland's IPC socket."""
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(_get_sock_path())
-    sock.sendall(f"j/{cmd}".encode())
+    sock.sendall(msg.encode())
     chunks = []
     while True:
         data = sock.recv(8192)
@@ -90,7 +92,17 @@ def hyprctl_json(cmd):
             break
         chunks.append(data)
     sock.close()
-    return json.loads(b"".join(chunks))
+    return b"".join(chunks)
+
+
+def hyprctl_json(cmd):
+    """Query Hyprland via IPC socket (no subprocess)."""
+    return json.loads(_hypr_request(f"j/{cmd}"))
+
+
+def hyprctl_dispatch(args):
+    """Dispatch a Hyprland command via IPC socket."""
+    _hypr_request(f"dispatch {args}")
 
 
 # ── Data layer ──────────────────────────────────────────────────────────────
@@ -336,6 +348,32 @@ window {{
     font-size: 14px;
     min-width: 200px;
     caret-color: #89b4fa;
+}}
+.folder-picker {{
+    background: rgba(30, 30, 46, 0.95);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 12px;
+}}
+.folder-btn {{
+    all: unset;
+    color: #cdd6f4;
+    background: rgba(49, 50, 68, 0.6);
+    border: 1px solid rgba(108, 112, 134, 0.3);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    min-width: 140px;
+}}
+.folder-btn:hover {{
+    color: #a6e3a1;
+    border-color: rgba(166, 227, 161, 0.5);
+    background: rgba(166, 227, 161, 0.08);
+}}
+.folder-btn-used {{
+    color: #585b70;
+    border-color: rgba(88, 91, 112, 0.2);
+    background: rgba(49, 50, 68, 0.3);
 }}
 .confirm-box {{
     background: rgba(49, 50, 68, 0.9);
@@ -695,6 +733,9 @@ class OverviewApp(Gtk.Application):
 
     def _on_key(self, _ctrl, keyval, _keycode, _state):
         if self.creating_project:
+            if keyval == Gdk.KEY_Escape:
+                self._cancel_create()
+                return True
             return False
 
         if keyval in (Gdk.KEY_Escape, Gdk.KEY_q):
@@ -826,44 +867,92 @@ class OverviewApp(Gtk.Application):
         parent = self.new_btn.get_parent()
         parent.remove(self.new_btn)
 
-        entry_box = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=8, halign=Gtk.Align.CENTER,
-        )
-        entry_box.set_margin_top(20)
+        # Scan ~/projects for folders
+        existing_names = set(self.projects.values())
+        folders = []
+        if os.path.isdir(PROJECTS_DIR):
+            for name in sorted(os.listdir(PROJECTS_DIR)):
+                path = os.path.join(PROJECTS_DIR, name)
+                if os.path.isdir(path) and not name.startswith("."):
+                    folders.append((name, name in existing_names))
 
-        entry = Gtk.Entry()
-        entry.set_placeholder_text("Project name...")
-        entry.add_css_class("project-entry")
-        entry.connect("activate", self._do_create, entry_box)
+        picker = Gtk.FlowBox()
+        picker.set_selection_mode(Gtk.SelectionMode.NONE)
+        picker.set_max_children_per_line(6)
+        picker.set_column_spacing(8)
+        picker.set_row_spacing(8)
+        picker.set_halign(Gtk.Align.CENTER)
+        picker.add_css_class("folder-picker")
+        picker.set_margin_top(12)
 
-        key_ctrl = Gtk.EventControllerKey()
-        key_ctrl.connect("key-pressed", self._on_entry_key, entry_box)
-        entry.add_controller(key_ctrl)
+        for name, used in folders:
+            btn = Gtk.Button(label=name)
+            btn.add_css_class("folder-btn")
+            if used:
+                btn.add_css_class("folder-btn-used")
+                btn.set_sensitive(False)
+            else:
+                btn.connect("clicked", self._on_folder_select, name, picker)
+            picker.append(btn)
 
-        entry_box.append(entry)
-        parent.append(entry_box)
-        entry.grab_focus()
+        if not folders:
+            lbl = Gtk.Label(label="No folders found in ~/projects")
+            lbl.add_css_class("confirm-label")
+            picker.append(lbl)
 
-    def _on_entry_key(self, _ctrl, keyval, _keycode, _state, entry_box):
-        if keyval == Gdk.KEY_Escape:
-            self._cancel_create(entry_box)
-            return True
-        return False
+        self._picker = picker
+        parent.append(picker)
 
-    def _cancel_create(self, entry_box):
-        parent = entry_box.get_parent()
-        parent.remove(entry_box)
-        self.creating_project = False
-        parent.append(self.new_btn)
+    def _cancel_create(self):
+        if hasattr(self, "_picker") and self._picker:
+            parent = self._picker.get_parent()
+            parent.remove(self._picker)
+            self._picker = None
+            self.creating_project = False
+            parent.append(self.new_btn)
 
-    def _do_create(self, entry, entry_box):
-        name = entry.get_text().strip()
-        if not name:
-            return
+    def _on_folder_select(self, _btn, name, picker):
+        # Create the project
         subprocess.run([HYPRCOMP_BIN, "create", name], capture_output=True)
+
+        # Find the new row
+        projects = load_projects()
+        row = None
+        for r, n in projects.items():
+            if n == name:
+                row = r
+                break
+        if row is None:
+            self.creating_project = False
+            self._reload_grid()
+            return
+
+        project_dir = os.path.join(PROJECTS_DIR, name)
+        ws1 = row_col_to_ws(row, 1)
+        ws2 = row_col_to_ws(row, 2)
+        ws3 = row_col_to_ws(row, 3)
+
+        # Update state and switch to column 1
+        try:
+            with open(STATE_FILE, "w") as f:
+                f.write(f"current_row={row}\n")
+        except Exception:
+            pass
+
+        # Launch apps on specific workspaces
+        hyprctl_dispatch(f"exec [workspace {ws1} silent] alacritty --working-directory {project_dir} -e claude")
+        hyprctl_dispatch(f"exec [workspace {ws2} silent] chromium")
+        hyprctl_dispatch(f"exec [workspace {ws3} silent] alacritty --working-directory {project_dir} -e nvim")
+
+        # Switch to the new project's first workspace
+        hyprctl_dispatch(f"workspace {ws1}")
+        subprocess.Popen(
+            ["pkill", "-SIGRTMIN+10", "waybar"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+
         self.creating_project = False
-        self._reload_grid()
+        self._hide()
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
