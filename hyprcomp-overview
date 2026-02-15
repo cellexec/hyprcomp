@@ -955,7 +955,7 @@ class OverviewApp(Gtk.Application):
         import time
 
         hyprctl_dispatch(f"workspace {ws1}")
-        hyprctl_dispatch(f"exec alacritty --working-directory {project_dir} -e {claude_bin}")
+        hyprctl_dispatch(f"exec alacritty --working-directory {project_dir} -e zsh -c '{claude_bin}; exec zsh'")
         time.sleep(1.0)
 
         hyprctl_dispatch(f"workspace {ws2}")
@@ -963,7 +963,7 @@ class OverviewApp(Gtk.Application):
         time.sleep(1.0)
 
         hyprctl_dispatch(f"workspace {ws3}")
-        hyprctl_dispatch(f"exec alacritty --working-directory {project_dir} -e nvim")
+        hyprctl_dispatch(f"exec alacritty --working-directory {project_dir} -e zsh -c 'nvim; exec zsh'")
         time.sleep(0.5)
 
         hyprctl_dispatch(f"workspace {ws1}")
