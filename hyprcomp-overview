@@ -53,7 +53,6 @@ BUILTIN_DEFAULTS = {
 CELL_W, CELL_H = 240, 135
 CELL_GAP = 8
 ROW_GAP = 12
-LABEL_W = 150
 
 # Catppuccin Mocha palette
 C = {
@@ -336,8 +335,6 @@ window {{
     color: #cdd6f4;
     font-size: 14px;
     font-weight: bold;
-    min-width: {LABEL_W}px;
-    padding-right: 16px;
 }}
 .project-label-active {{
     color: #89b4fa;
@@ -355,13 +352,8 @@ window {{
 .ws-cell-active {{
     border-color: #89b4fa;
 }}
-.col-label {{
-    color: #6c7086;
-    font-size: 11px;
-    min-height: 20px;
-}}
-.col-label-active {{
-    color: #89b4fa;
+.ws-cell-selected {{
+    border-color: rgba(137, 180, 250, 0.5);
 }}
 .del-btn {{
     all: unset;
@@ -468,9 +460,11 @@ class OverviewApp(Gtk.Application):
         self.creating_project = False
         self.hovered_ws = None
         self.hovered_row = None
+        self._sel_row = None
+        self._sel_col = None
         self._cells = {}
         self._row_labels = {}
-        self._col_labels = {}
+        self._row_max = {}
         self._visible = False
 
     def do_activate(self):
@@ -526,6 +520,9 @@ class OverviewApp(Gtk.Application):
         self.active_row = ws_to_row(self.active_ws_id)
         self.active_col = ws_to_col(self.active_ws_id)
         self._build_grid()
+        self._sel_row = self.active_row
+        self._sel_col = self.active_col
+        self._update_selection()
         self._start_ws_listener()
         # Capture fresh screenshot of active ws in background
         threading.Thread(target=self._capture_active_thumb, daemon=True).start()
@@ -617,13 +614,6 @@ class OverviewApp(Gtk.Application):
             if self.active_row in self._row_labels:
                 self._row_labels[self.active_row].add_css_class("project-label-active")
 
-        # Toggle column header highlight
-        if old_col != self.active_col:
-            if old_col in self._col_labels:
-                self._col_labels[old_col].remove_css_class("col-label-active")
-            if self.active_col in self._col_labels:
-                self._col_labels[self.active_col].add_css_class("col-label-active")
-
         return False
 
     # ── Grid building ───────────────────────────────────────────────────────
@@ -631,8 +621,7 @@ class OverviewApp(Gtk.Application):
     def _build_grid(self):
         self._cells = {}
         self._row_labels = {}
-        self._col_labels = {}
-
+        
         outer = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
             halign=Gtk.Align.CENTER,
@@ -651,47 +640,46 @@ class OverviewApp(Gtk.Application):
                 m = max(m, self.active_col)
             row_max[row] = max(m, 1)
 
-        global_max = max(row_max.values()) if row_max else 1
-
-        # Column headers
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=CELL_GAP)
-        spacer = Gtk.Label(label="")
-        spacer.set_size_request(LABEL_W, -1)
-        header.append(spacer)
-        for col in range(1, global_max + 1):
-            lbl = Gtk.Label(label=str(col))
-            lbl.set_size_request(CELL_W, 20)
-            lbl.add_css_class("col-label")
-            if col == self.active_col and self.active_row in self.projects:
-                lbl.add_css_class("col-label-active")
-            self._col_labels[col] = lbl
-            header.append(lbl)
-        del_spacer = Gtk.Label(label="")
-        del_spacer.set_size_request(40, -1)
-        header.append(del_spacer)
-        outer.append(header)
+        self._row_max = row_max
 
         # Project rows
-        for row in sorted(self.projects):
+        for idx, row in enumerate(sorted(self.projects)):
             name = self.projects[row]
             is_active = row == self.active_row
 
+            # Vertical group: title on top, cells below
+            group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            if idx > 0:
+                group.set_margin_top(ROW_GAP * 2)
+
+            # Title row: label + delete button
+            title_box = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL,
+                spacing=CELL_GAP,
+            )
+            del_btn = Gtk.Button(label="\u00d7")
+            del_btn.add_css_class("del-btn")
+            del_btn.set_valign(Gtk.Align.CENTER)
+            del_btn.connect("clicked", self._on_delete_click, row, name, group)
+            title_box.append(del_btn)
+
+            display_name = name.rsplit("/", 1)[-1]
+            label = Gtk.Label(label=display_name, xalign=0.0)
+            label.set_hexpand(True)
+            label.add_css_class("project-label")
+            if is_active:
+                label.add_css_class("project-label-active")
+            self._row_labels[row] = label
+            title_box.append(label)
+            group.append(title_box)
+
+            # Cells row
             row_box = Gtk.Box(
                 orientation=Gtk.Orientation.HORIZONTAL,
                 spacing=CELL_GAP,
                 valign=Gtk.Align.CENTER,
             )
-            row_box.set_margin_top(ROW_GAP)
-
-            # Label
-            label = Gtk.Label(label=name, xalign=1.0)
-            label.set_size_request(LABEL_W, -1)
-            label.set_ellipsize(3)  # END
-            label.add_css_class("project-label")
-            if is_active:
-                label.add_css_class("project-label-active")
-            self._row_labels[row] = label
-            row_box.append(label)
+            row_box.set_margin_top(4)
 
             # Workspace cells — only up to this row's max occupied column
             for col in range(1, row_max[row] + 1):
@@ -736,14 +724,8 @@ class OverviewApp(Gtk.Application):
 
                 row_box.append(btn)
 
-            # Delete button
-            del_btn = Gtk.Button(label="\u00d7")
-            del_btn.add_css_class("del-btn")
-            del_btn.set_valign(Gtk.Align.CENTER)
-            del_btn.connect("clicked", self._on_delete_click, row, name, row_box)
-            row_box.append(del_btn)
-
-            outer.append(row_box)
+            group.append(row_box)
+            outer.append(group)
 
         # "+ New Project" button
         self.new_btn = Gtk.Button(label="+ New Project")
@@ -779,6 +761,35 @@ class OverviewApp(Gtk.Application):
         self.hovered_ws = None
         self.hovered_row = None
 
+    # ── Keyboard selection ─────────────────────────────────────────────────
+
+    def _update_selection(self):
+        """Update CSS class on selected cell."""
+        for ws, btn in self._cells.items():
+            btn.remove_css_class("ws-cell-selected")
+        if self._sel_row is not None and self._sel_col is not None:
+            ws = row_col_to_ws(self._sel_row, self._sel_col)
+            if ws in self._cells:
+                self._cells[ws].add_css_class("ws-cell-selected")
+            # Also update hovered state so d/a/x work with keyboard
+            self.hovered_ws = ws
+            self.hovered_row = self._sel_row
+
+    def _move_selection(self, dr, dc):
+        """Move keyboard selection by delta row/col."""
+        if not self._row_max:
+            return
+        rows = sorted(self._row_max.keys())
+        if self._sel_row is None:
+            self._sel_row = rows[0]
+            self._sel_col = 1
+        else:
+            idx = rows.index(self._sel_row) if self._sel_row in rows else 0
+            idx = max(0, min(len(rows) - 1, idx + dr))
+            self._sel_row = rows[idx]
+            self._sel_col = max(1, min(self._row_max[self._sel_row], self._sel_col + dc))
+        self._update_selection()
+
     # ── Event handlers ──────────────────────────────────────────────────────
 
     def _on_key(self, _ctrl, keyval, _keycode, _state):
@@ -795,6 +806,34 @@ class OverviewApp(Gtk.Application):
         # Guard: data not loaded yet
         if not hasattr(self, "projects"):
             return False
+
+        # Keyboard navigation
+        if keyval in (Gdk.KEY_h, Gdk.KEY_Left):
+            self._move_selection(0, -1)
+            return True
+        if keyval in (Gdk.KEY_l, Gdk.KEY_Right):
+            self._move_selection(0, 1)
+            return True
+        if keyval in (Gdk.KEY_k, Gdk.KEY_Up):
+            self._move_selection(-1, 0)
+            return True
+        if keyval in (Gdk.KEY_j, Gdk.KEY_Down):
+            self._move_selection(1, 0)
+            return True
+        if keyval == Gdk.KEY_Return:
+            if self._sel_row is not None and self._sel_col is not None:
+                self._switch_to_ws(row_col_to_ws(self._sel_row, self._sel_col))
+            return True
+
+        # Number keys: select first window of Nth project
+        if Gdk.KEY_1 <= keyval <= Gdk.KEY_9:
+            rows = sorted(self._row_max.keys())
+            idx = keyval - Gdk.KEY_1
+            if idx < len(rows):
+                self._sel_row = rows[idx]
+                self._sel_col = 1
+                self._update_selection()
+            return True
 
         if keyval == Gdk.KEY_d and self.hovered_ws is not None:
             self._close_ws_windows(self.hovered_ws)

@@ -192,10 +192,13 @@ Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve 
 
 | Key | Action |
 |-----|--------|
+| Arrow keys / h,j,k,l | Navigate between workspaces |
+| Enter | Switch to selected workspace |
+| 1-9 | Select first window of Nth project |
 | Click cell | Switch to that workspace |
-| d | Close all windows in hovered workspace |
-| a | Open new workspace at end of hovered project |
-| x | Delete hovered project (closes all windows) |
+| d | Close all windows in selected workspace |
+| a | Open new workspace at end of selected project |
+| x | Delete selected project (closes all windows) |
 | q / Escape | Close overlay |
 
 ### Manage projects
