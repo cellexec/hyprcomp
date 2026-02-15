@@ -381,6 +381,13 @@ cmd_overview() {
     "$(dirname "$0")/hyprcomp-overview" &disown
 }
 
+cmd_restart() {
+    pkill -f 'hyprcomp-overview' 2>/dev/null || true
+    sleep 0.2
+    "$(dirname "$0")/hyprcomp-overview" &disown
+    echo "Overview daemon restarted"
+}
+
 # --- Main ---
 
 cmd=${1:-help}
@@ -400,6 +407,7 @@ case "$cmd" in
     delete)     cmd_delete ;;
     delete-row) cmd_delete_row "$@" ;;
     overview)   cmd_overview ;;
+    restart)    cmd_restart ;;
     help)
         echo "Usage: hyprcomp <command> [args]"
         echo ""
@@ -417,6 +425,7 @@ case "$cmd" in
         echo "  delete          Unregister current project row"
         echo "  delete-row <N>  Unregister project at row N (closes windows)"
         echo "  overview        Toggle workspace overview overlay"
+        echo "  restart         Restart the overview daemon"
         ;;
     *)
         echo "Unknown command: $cmd"
