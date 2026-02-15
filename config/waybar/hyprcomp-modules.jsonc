@@ -1,0 +1,62 @@
+// HyprComp waybar modules
+// Merge these into your waybar config.jsonc
+//
+// In "modules-left", replace "hyprland/workspaces" with:
+//   "custom/project", "custom/ws-1", "custom/ws-2", "custom/ws-3",
+//   "custom/ws-4", "custom/ws-5", "custom/ws-6", "custom/ws-7",
+//   "custom/ws-8", "custom/ws-9"
+
+{
+  "custom/project": {
+    "exec": "~/.config/waybar/scripts/project.sh",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 1,
+    "signal": 10
+  },
+  "custom/ws-1": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 1",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 1"
+  },
+  "custom/ws-2": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 2",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 2"
+  },
+  "custom/ws-3": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 3",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 3"
+  },
+  "custom/ws-4": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 4",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 4"
+  },
+  "custom/ws-5": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 5",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 5"
+  },
+  "custom/ws-6": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 6",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 6"
+  },
+  "custom/ws-7": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 7",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 7"
+  },
+  "custom/ws-8": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 8",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 8"
+  },
+  "custom/ws-9": {
+    "exec": "~/.config/waybar/scripts/ws-button.sh 9",
+    "return-type": "json", "format": "{text}", "interval": 2, "signal": 10,
+    "on-click": "~/projects/hyprcomp/hyprcomp go 9"
+  }
+}

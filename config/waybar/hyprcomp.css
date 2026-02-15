@@ -1,0 +1,93 @@
+/* HyprComp waybar styles
+ * Add to your waybar style.css (or @import this file)
+ *
+ * Uses Catppuccin Mocha colors. Adjust the color variables
+ * or hardcode your own values to match your theme.
+ *
+ * Expected CSS variables (define these or replace with hex values):
+ *   @cyan     - active workspace bg (#89dceb)
+ *   @subtext0 - occupied workspace text (#a6adc8)
+ *   @surface0 - hover bg (#313244)
+ *   @surface1 - divider color / empty workspace text (#45475a)
+ *   @text     - hover text (#cdd6f4)
+ */
+
+/* Project name label */
+#custom-project {
+  padding: 4px 10px;
+  margin: 0 4px 0 0;
+  border-radius: 5px;
+  color: @cyan;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+#custom-project.empty {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+/* Workspace buttons */
+#custom-ws-1,
+#custom-ws-2,
+#custom-ws-3,
+#custom-ws-4,
+#custom-ws-5,
+#custom-ws-6,
+#custom-ws-7,
+#custom-ws-8,
+#custom-ws-9 {
+  padding: 4px 12px;
+  margin: 0 4px;
+  min-width: 14px;
+  border-radius: 5px;
+  background-color: transparent;
+  color: @subtext0;
+  transition: all 0.2s ease;
+  border-bottom: 2px solid rgba(137, 220, 235, 0.4);
+}
+
+/* Empty workspaces */
+#custom-ws-1.empty-ws,
+#custom-ws-2.empty-ws,
+#custom-ws-3.empty-ws,
+#custom-ws-4.empty-ws,
+#custom-ws-5.empty-ws,
+#custom-ws-6.empty-ws,
+#custom-ws-7.empty-ws,
+#custom-ws-8.empty-ws,
+#custom-ws-9.empty-ws {
+  color: @surface1;
+  border-bottom: 2px solid transparent;
+}
+
+/* Active workspace */
+#custom-ws-1.active,
+#custom-ws-2.active,
+#custom-ws-3.active,
+#custom-ws-4.active,
+#custom-ws-5.active,
+#custom-ws-6.active,
+#custom-ws-7.active,
+#custom-ws-8.active,
+#custom-ws-9.active {
+  color: #000;
+  background-color: @cyan;
+  font-weight: bold;
+  border-bottom: 2px solid transparent;
+}
+
+/* Hover */
+#custom-ws-1:hover,
+#custom-ws-2:hover,
+#custom-ws-3:hover,
+#custom-ws-4:hover,
+#custom-ws-5:hover,
+#custom-ws-6:hover,
+#custom-ws-7:hover,
+#custom-ws-8:hover,
+#custom-ws-9:hover {
+  color: @text;
+  background-color: @surface0;
+}
