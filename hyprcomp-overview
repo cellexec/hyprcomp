@@ -3,7 +3,9 @@
 
 Shows a 2D grid of all projects (rows) and workspaces (columns) with
 screenshot thumbnails for the active workspace and synthetic previews
-for occupied workspaces. Click a cell to switch, Escape to close.
+for occupied workspaces.
+
+Keys: click=switch, d=close windows, a=new workspace, q/Esc=quit.
 """
 
 import ctypes
@@ -21,11 +23,14 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 
 from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
+import threading
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
@@ -79,42 +84,109 @@ def load_projects():
     return projects
 
 
-def load_grid_data():
-    projects = load_projects()
-    active_ws = hyprctl_json("activeworkspace")
-    active_ws_id = active_ws["id"]
-    clients = hyprctl_json("clients")
-    monitors = hyprctl_json("monitors")
+def capture_screenshot(monitor_name):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    path = os.path.join(CACHE_DIR, "active.jpg")
+    try:
+        cmd = ["grim", "-t", "jpeg", "-q", "50", "-s", "0.25"]
+        if monitor_name:
+            cmd.extend(["-o", monitor_name])
+        cmd.append(path)
+        subprocess.run(cmd, capture_output=True, timeout=5)
+        if os.path.isfile(path):
+            return path
+    except Exception:
+        pass
+    return None
 
-    # Group clients by workspace
+
+def load_all():
+    """Load grid data and screenshot in parallel."""
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        f_projects = pool.submit(load_projects)
+        f_active = pool.submit(hyprctl_json, "activeworkspace")
+        f_clients = pool.submit(hyprctl_json, "clients")
+        f_monitors = pool.submit(hyprctl_json, "monitors")
+        f_workspaces = pool.submit(hyprctl_json, "workspaces")
+
+        # activeworkspace finishes fast — start grim with its monitor name
+        active_ws = f_active.result()
+        f_screenshot = pool.submit(capture_screenshot, active_ws.get("monitor", ""))
+
+        projects = f_projects.result()
+        clients = f_clients.result()
+        monitors = f_monitors.result()
+        workspaces = f_workspaces.result()
+        screenshot_path = f_screenshot.result()
+
+    active_ws_id = active_ws["id"]
+
     ws_clients = {}
     for c in clients:
         ws_id = c["workspace"]["id"]
         if ws_id > 0:
             ws_clients.setdefault(ws_id, []).append(c)
 
-    # Monitor info by name
     mon_info = {}
     for m in monitors:
         mon_info[m["name"]] = {
-            "x": m["x"],
-            "y": m["y"],
-            "width": m["width"],
-            "height": m["height"],
+            "x": m["x"], "y": m["y"],
+            "width": m["width"], "height": m["height"],
         }
 
-    # Workspace → monitor mapping
     ws_mon = {}
-    try:
-        workspaces = hyprctl_json("workspaces")
-        for ws in workspaces:
-            mon_name = ws.get("monitor", "") or ws.get("lastmonitor", "")
-            if mon_name in mon_info:
-                ws_mon[ws["id"]] = mon_info[mon_name]
-    except Exception:
-        pass
+    for ws in workspaces:
+        mon_name = ws.get("monitor", "") or ws.get("lastmonitor", "")
+        if mon_name in mon_info:
+            ws_mon[ws["id"]] = mon_info[mon_name]
 
-    # Primary (focused) monitor
+    primary_mon = None
+    for m in monitors:
+        if m.get("focused"):
+            primary_mon = mon_info[m["name"]]
+            break
+    if primary_mon is None and monitors:
+        primary_mon = mon_info[monitors[0]["name"]]
+
+    grid_data = (projects, active_ws_id, ws_clients, ws_mon, primary_mon)
+    return grid_data, screenshot_path
+
+
+def load_grid_data():
+    """Reload just the grid data (no screenshot)."""
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        f_active = pool.submit(hyprctl_json, "activeworkspace")
+        f_clients = pool.submit(hyprctl_json, "clients")
+        f_monitors = pool.submit(hyprctl_json, "monitors")
+        f_workspaces = pool.submit(hyprctl_json, "workspaces")
+
+        active_ws = f_active.result()
+        clients = f_clients.result()
+        monitors = f_monitors.result()
+        workspaces = f_workspaces.result()
+
+    projects = load_projects()
+    active_ws_id = active_ws["id"]
+
+    ws_clients = {}
+    for c in clients:
+        ws_id = c["workspace"]["id"]
+        if ws_id > 0:
+            ws_clients.setdefault(ws_id, []).append(c)
+
+    mon_info = {}
+    for m in monitors:
+        mon_info[m["name"]] = {
+            "x": m["x"], "y": m["y"],
+            "width": m["width"], "height": m["height"],
+        }
+
+    ws_mon = {}
+    for ws in workspaces:
+        mon_name = ws.get("monitor", "") or ws.get("lastmonitor", "")
+        if mon_name in mon_info:
+            ws_mon[ws["id"]] = mon_info[mon_name]
+
     primary_mon = None
     for m in monitors:
         if m.get("focused"):
@@ -124,24 +196,6 @@ def load_grid_data():
         primary_mon = mon_info[monitors[0]["name"]]
 
     return projects, active_ws_id, ws_clients, ws_mon, primary_mon
-
-
-def capture_active_screenshot():
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    path = os.path.join(CACHE_DIR, "active.jpg")
-    try:
-        active = hyprctl_json("activeworkspace")
-        monitor = active.get("monitor", "")
-        cmd = ["grim", "-t", "jpeg", "-q", "50", "-s", "0.25"]
-        if monitor:
-            cmd.extend(["-o", monitor])
-        cmd.append(path)
-        subprocess.run(cmd, capture_output=True, timeout=5)
-        if os.path.isfile(path):
-            return path
-    except Exception:
-        pass
-    return None
 
 
 # ── Workspace math ──────────────────────────────────────────────────────────
@@ -325,15 +379,18 @@ window {{
 
 
 class OverviewApp(Gtk.Application):
-    def __init__(self, screenshot_path):
+    def __init__(self, grid_data, screenshot_path):
         super().__init__(application_id="com.hyprcomp.overview")
+        self.grid_data = grid_data
         self.screenshot_path = screenshot_path
         self.screenshot_texture = None
         self.creating_project = False
+        self.hovered_ws = None
+        self.hovered_row = None
 
     def do_activate(self):
         self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
-            load_grid_data()
+            self.grid_data
         )
         self.active_row = ws_to_row(self.active_ws_id)
         self.active_col = ws_to_col(self.active_ws_id)
@@ -369,13 +426,58 @@ class OverviewApp(Gtk.Application):
             Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-        # Escape key
+        # Key handler
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect("key-pressed", self._on_key)
         self.win.add_controller(key_ctrl)
 
         self._build_grid()
         self.win.present()
+
+        # Listen for workspace changes (gestures while overlay is open)
+        self._start_ws_listener()
+
+    # ── Hyprland IPC listener ────────────────────────────────────────────────
+
+    def _start_ws_listener(self):
+        """Listen for workspace change events from Hyprland's socket2."""
+        t = threading.Thread(target=self._ws_listener, daemon=True)
+        t.start()
+
+    def _ws_listener(self):
+        sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+        runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        sock_path = f"{runtime}/hypr/{sig}/.socket2.sock"
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(sock_path)
+            buf = b""
+            while True:
+                data = sock.recv(4096)
+                if not data:
+                    break
+                buf += data
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    line = line.decode("utf-8", errors="replace")
+                    if line.startswith("workspace>>"):
+                        try:
+                            ws_id = int(line.split(">>", 1)[1])
+                            GLib.idle_add(self._on_workspace_changed, ws_id)
+                        except ValueError:
+                            pass
+        except Exception:
+            pass
+
+    def _on_workspace_changed(self, ws_id):
+        """Update active highlight when workspace changes via gesture."""
+        if ws_id == self.active_ws_id:
+            return False
+        self.active_ws_id = ws_id
+        self.active_row = ws_to_row(ws_id)
+        self.active_col = ws_to_col(ws_id)
+        self._build_grid()
+        return False
 
     # ── Grid building ───────────────────────────────────────────────────────
 
@@ -467,6 +569,13 @@ class OverviewApp(Gtk.Application):
                     btn.set_child(da)
 
                 btn.connect("clicked", self._on_cell_click, ws)
+
+                # Hover tracking for keyboard shortcuts
+                motion = Gtk.EventControllerMotion()
+                motion.connect("enter", self._on_cell_enter, ws, row)
+                motion.connect("leave", self._on_cell_leave)
+                btn.add_controller(motion)
+
                 row_box.append(btn)
 
             # Delete button
@@ -488,15 +597,39 @@ class OverviewApp(Gtk.Application):
 
         self.win.set_child(outer)
 
+    # ── Hover tracking ──────────────────────────────────────────────────────
+
+    def _on_cell_enter(self, _ctrl, _x, _y, ws, row):
+        self.hovered_ws = ws
+        self.hovered_row = row
+
+    def _on_cell_leave(self, _ctrl):
+        self.hovered_ws = None
+        self.hovered_row = None
+
     # ── Event handlers ──────────────────────────────────────────────────────
 
     def _on_key(self, _ctrl, keyval, _keycode, _state):
-        if keyval == Gdk.KEY_Escape:
+        # Don't intercept keys while typing a project name
+        if self.creating_project:
+            return False
+
+        if keyval in (Gdk.KEY_Escape, Gdk.KEY_q):
             self.quit()
             return True
+
+        if keyval == Gdk.KEY_d and self.hovered_ws is not None:
+            self._close_ws_windows(self.hovered_ws)
+            return True
+
+        if keyval == Gdk.KEY_a and self.hovered_row is not None:
+            self._new_workspace_in_row(self.hovered_row)
+            return True
+
         return False
 
-    def _on_cell_click(self, _btn, ws_id):
+    def _switch_to_ws(self, ws_id):
+        """Switch to workspace, update state, close overlay."""
         row = ws_to_row(ws_id)
         try:
             with open(STATE_FILE, "w") as f:
@@ -505,15 +638,48 @@ class OverviewApp(Gtk.Application):
             pass
         subprocess.Popen(
             ["hyprctl", "dispatch", "workspace", str(ws_id)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         subprocess.Popen(
             ["pkill", "-SIGRTMIN+10", "waybar"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         self.quit()
+
+    def _on_cell_click(self, _btn, ws_id):
+        self._switch_to_ws(ws_id)
+
+    def _close_ws_windows(self, ws_id):
+        """Close all windows in a workspace and rebuild grid."""
+        for client in self.ws_clients.get(ws_id, []):
+            addr = client.get("address", "")
+            if addr:
+                subprocess.run(
+                    ["hyprctl", "dispatch", "closewindow", f"address:{addr}"],
+                    capture_output=True,
+                )
+        self._reload_grid()
+
+    def _new_workspace_in_row(self, row):
+        """Switch to first empty workspace after last occupied in row."""
+        highest_col = 0
+        for col in range(1, 11):
+            if row_col_to_ws(row, col) in self.ws_clients:
+                highest_col = col
+        # Also consider the active workspace column in this row
+        if row == self.active_row:
+            highest_col = max(highest_col, self.active_col)
+        target_col = min(highest_col + 1, 10)
+        self._switch_to_ws(row_col_to_ws(row, target_col))
+
+    def _reload_grid(self):
+        """Reload data from hyprctl and rebuild the grid."""
+        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
+            load_grid_data()
+        )
+        self.active_row = ws_to_row(self.active_ws_id)
+        self.active_col = ws_to_col(self.active_ws_id)
+        self._build_grid()
 
     def _on_delete_click(self, btn, row, name, row_box):
         parent = btn.get_parent()
@@ -549,7 +715,6 @@ class OverviewApp(Gtk.Application):
         parent.append(del_btn)
 
     def _do_delete(self, _btn, row):
-        # Close all windows in this row
         for col in range(1, 11):
             ws = row_col_to_ws(row, col)
             for client in self.ws_clients.get(ws, []):
@@ -559,16 +724,8 @@ class OverviewApp(Gtk.Application):
                         ["hyprctl", "dispatch", "closewindow", f"address:{addr}"],
                         capture_output=True,
                     )
-
         subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
-
-        # Rebuild
-        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
-            load_grid_data()
-        )
-        self.active_row = ws_to_row(self.active_ws_id)
-        self.active_col = ws_to_col(self.active_ws_id)
-        self._build_grid()
+        self._reload_grid()
 
     def _on_new_project(self, _btn):
         if self.creating_project:
@@ -580,8 +737,7 @@ class OverviewApp(Gtk.Application):
 
         entry_box = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=8,
-            halign=Gtk.Align.CENTER,
+            spacing=8, halign=Gtk.Align.CENTER,
         )
         entry_box.set_margin_top(20)
 
@@ -614,26 +770,20 @@ class OverviewApp(Gtk.Application):
         name = entry.get_text().strip()
         if not name:
             return
-
         subprocess.run([HYPRCOMP_BIN, "create", name], capture_output=True)
         self.creating_project = False
-
-        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
-            load_grid_data()
-        )
-        self.active_row = ws_to_row(self.active_ws_id)
-        self.active_col = ws_to_col(self.active_ws_id)
-        self._build_grid()
+        self._reload_grid()
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
 
 def main():
-    screenshot = capture_active_screenshot()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
-    app = OverviewApp(screenshot)
+
+    grid_data, screenshot_path = load_all()
+    app = OverviewApp(grid_data, screenshot_path)
     app.run([])
 
 
