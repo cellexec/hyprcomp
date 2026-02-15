@@ -379,31 +379,18 @@ window {{
 
 
 class OverviewApp(Gtk.Application):
-    def __init__(self, grid_data, screenshot_path):
+    def __init__(self):
         super().__init__(application_id="com.hyprcomp.overview")
-        self.grid_data = grid_data
-        self.screenshot_path = screenshot_path
         self.screenshot_texture = None
         self.creating_project = False
         self.hovered_ws = None
         self.hovered_row = None
+        self._cells = {}
+        self._row_labels = {}
+        self._col_labels = {}
 
     def do_activate(self):
-        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
-            self.grid_data
-        )
-        self.active_row = ws_to_row(self.active_ws_id)
-        self.active_col = ws_to_col(self.active_ws_id)
-
-        if self.screenshot_path and os.path.isfile(self.screenshot_path):
-            try:
-                self.screenshot_texture = Gdk.Texture.new_from_filename(
-                    self.screenshot_path
-                )
-            except Exception:
-                pass
-
-        # Window
+        # Show window immediately (dark overlay appears instant)
         self.win = Gtk.ApplicationWindow(application=self)
         Gtk4LayerShell.init_for_window(self.win)
         Gtk4LayerShell.set_layer(self.win, Gtk4LayerShell.Layer.OVERLAY)
@@ -419,23 +406,41 @@ class OverviewApp(Gtk.Application):
         )
         Gtk4LayerShell.set_namespace(self.win, "hyprcomp-overview")
 
-        # CSS
         css = Gtk.CssProvider()
         css.load_from_string(CSS)
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-        # Key handler
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect("key-pressed", self._on_key)
         self.win.add_controller(key_ctrl)
 
-        self._build_grid()
         self.win.present()
 
-        # Listen for workspace changes (gestures while overlay is open)
+        # Load data in background, build grid when ready
+        threading.Thread(target=self._load_and_build, daemon=True).start()
+
+    def _load_and_build(self):
+        grid_data, screenshot_path = load_all()
+        GLib.idle_add(self._on_data_ready, grid_data, screenshot_path)
+
+    def _on_data_ready(self, grid_data, screenshot_path):
+        self.projects, self.active_ws_id, self.ws_clients, self.ws_mon, self.primary_mon = (
+            grid_data
+        )
+        self.active_row = ws_to_row(self.active_ws_id)
+        self.active_col = ws_to_col(self.active_ws_id)
+
+        if screenshot_path and os.path.isfile(screenshot_path):
+            try:
+                self.screenshot_texture = Gdk.Texture.new_from_filename(screenshot_path)
+            except Exception:
+                pass
+
+        self._build_grid()
         self._start_ws_listener()
+        return False
 
     # ── Hyprland IPC listener ────────────────────────────────────────────────
 
@@ -660,13 +665,16 @@ class OverviewApp(Gtk.Application):
     # ── Event handlers ──────────────────────────────────────────────────────
 
     def _on_key(self, _ctrl, keyval, _keycode, _state):
-        # Don't intercept keys while typing a project name
         if self.creating_project:
             return False
 
         if keyval in (Gdk.KEY_Escape, Gdk.KEY_q):
             self._close_overlay()
             return True
+
+        # Guard: data not loaded yet
+        if not hasattr(self, "projects"):
+            return False
 
         if keyval == Gdk.KEY_d and self.hovered_ws is not None:
             self._close_ws_windows(self.hovered_ws)
@@ -837,8 +845,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
-    grid_data, screenshot_path = load_all()
-    app = OverviewApp(grid_data, screenshot_path)
+    app = OverviewApp()
     app.run([])
 
 
