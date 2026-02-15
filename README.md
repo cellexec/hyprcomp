@@ -30,7 +30,7 @@ Project C:       ws 21         ws 22         ws 23
 - Hyprland
 - jq
 - waybar (optional, for bar integration)
-- Python 3 with PyGObject, gtk4-layer-shell (optional, for workspace overview)
+- Python 3.11+ with PyGObject, gtk4-layer-shell (optional, for workspace overview)
 - grim (optional, for workspace screenshots in overview)
 
 ## Installation
@@ -117,18 +117,60 @@ killall waybar; waybar &disown
 
 ### Create projects
 
-From the overview (SUPER+Tab), click "+ New Project" to pick a folder from `~/projects/`. Selecting a folder creates the project and launches:
-- **Column 1** - terminal with claude code
-- **Column 2** - chromium (isolated profile per project)
-- **Column 3** - terminal with nvim
+From the overview (SUPER+Tab), click "+ New Project" to pick a folder from `~/projects/`. Selecting a folder creates the project and launches windows based on its config (see below). Folders with subprojects show a `›` suffix and expand into a sub-picker.
 
 Or from the command line:
 
 ```bash
 hyprcomp create homelab        # Row 0, workspaces 1-10
 hyprcomp create guitar-studio  # Row 1, workspaces 11-20
-hyprcomp create cooking-book   # Row 2, workspaces 21-30
+hyprcomp create homelab/flux   # Subproject — resolves to ~/projects/homelab/flux
 ```
+
+### Per-project configuration
+
+Place a `.hyprcomp.toml` in any project root to control which windows launch:
+
+```toml
+[[windows]]
+exec = "claude"
+terminal = true     # Wrap in alacritty terminal
+
+[[windows]]
+exec = "chromium"
+browser = true      # Add --user-data-dir for isolation
+
+[[windows]]
+exec = "nvim"
+terminal = true
+# cwd = "subdir"    # Optional: working dir relative to project root
+```
+
+Window types:
+- `terminal = true` — runs in alacritty with zsh
+- `browser = true` — adds `--user-data-dir` for per-project isolation
+- Neither — launched as a plain GUI app via hyprctl
+
+### Subprojects (monorepo support)
+
+Directories with `[[subprojects]]` in their `.hyprcomp.toml` expand into separate projects in the picker:
+
+```toml
+[[subprojects]]
+path = "flux"
+
+[[subprojects]]
+path = "monorepo/apps/web"
+name = "monorepo-web"       # Optional display name
+```
+
+Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve to the full filesystem path.
+
+### Config resolution
+
+1. `<project_dir>/.hyprcomp.toml` `[[windows]]`
+2. `~/.config/hyprcomp/defaults.toml` `[[windows]]` (global defaults)
+3. Built-in defaults (claude, chromium, nvim)
 
 ### Navigate
 
@@ -174,7 +216,10 @@ The overview overlay (`hyprcomp-overview`) is a GTK4 + layer-shell Python app th
 State is stored in `~/.config/hyprcomp/`:
 - `state` - current row number
 - `projects` - row-to-name mapping (e.g., `0:homelab`)
+- `defaults.toml` - global default windows config (optional)
 - `chromium/<name>/` - isolated Chromium profiles per project
+
+Per-project config lives in `<project_dir>/.hyprcomp.toml`.
 
 Workspace thumbnails are cached in `~/.cache/hyprcomp/thumbs/`.
 
