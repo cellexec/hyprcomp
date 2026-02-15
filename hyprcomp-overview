@@ -375,20 +375,49 @@ window {{
     color: #f38ba8;
     background: rgba(243, 139, 168, 0.1);
 }}
-.new-btn {{
-    all: unset;
-    color: #6c7086;
-    background: rgba(49, 50, 68, 0.5);
-    border: 1px dashed rgba(108, 112, 134, 0.4);
-    padding: 8px 20px;
-    font-size: 13px;
+.toolbar {{
+    background: rgba(108, 112, 134, 0.2);
     border-radius: 8px;
-    margin-top: 12px;
+    padding: 8px 14px;
+    margin-bottom: 20px;
 }}
-.new-btn:hover {{
-    color: #a6e3a1;
-    border-color: rgba(166, 227, 161, 0.4);
-    background: rgba(166, 227, 161, 0.05);
+.toolbar-logo-icon {{
+    color: #89b4fa;
+    font-size: 18px;
+    margin-right: 6px;
+}}
+.toolbar-logo-text {{
+    color: #89b4fa;
+    font-size: 14px;
+    font-weight: bold;
+    margin-right: 32px;
+}}
+.toolbar-btn {{
+    all: unset;
+    color: #cdd6f4;
+    padding: 4px 0;
+    font-size: 12px;
+}}
+.toolbar-btn:hover {{
+    color: #89b4fa;
+}}
+.toolbar-btn-danger {{
+    color: #6c7086;
+}}
+.toolbar-btn-danger:hover {{
+    color: #f38ba8;
+}}
+.toolbar-sep {{
+    color: rgba(108, 112, 134, 0.2);
+    font-size: 12px;
+}}
+.toolbar-shortcuts {{
+    color: #6c7086;
+    font-size: 11px;
+}}
+.toolbar-shortcut-key {{
+    color: #89b4fa;
+    font-size: 11px;
 }}
 .project-entry {{
     color: #cdd6f4;
@@ -399,32 +428,6 @@ window {{
     font-size: 14px;
     min-width: 200px;
     caret-color: #89b4fa;
-}}
-.folder-picker {{
-    background: rgba(30, 30, 46, 0.95);
-    border-radius: 12px;
-    padding: 16px;
-    margin-top: 12px;
-}}
-.folder-btn {{
-    all: unset;
-    color: #cdd6f4;
-    background: rgba(49, 50, 68, 0.6);
-    border: 1px solid rgba(108, 112, 134, 0.3);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 13px;
-    min-width: 140px;
-}}
-.folder-btn:hover {{
-    color: #a6e3a1;
-    border-color: rgba(166, 227, 161, 0.5);
-    background: rgba(166, 227, 161, 0.08);
-}}
-.folder-btn-used {{
-    color: #585b70;
-    border-color: rgba(88, 91, 112, 0.2);
-    background: rgba(49, 50, 68, 0.3);
 }}
 .confirm-box {{
     background: rgba(49, 50, 68, 0.9);
@@ -466,7 +469,6 @@ class OverviewApp(Gtk.Application):
         super().__init__(application_id="com.hyprcomp.overview",
                          flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.screenshot_texture = None
-        self.creating_project = False
         self.hovered_ws = None
         self.hovered_row = None
         self._sel_row = None
@@ -640,6 +642,56 @@ class OverviewApp(Gtk.Application):
         )
         outer.add_css_class("overview-box")
 
+        # Toolbar
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        toolbar.add_css_class("toolbar")
+
+        logo_icon = Gtk.Label(label="\ue200")
+        logo_icon.add_css_class("toolbar-logo-icon")
+        toolbar.append(logo_icon)
+        logo_text = Gtk.Label(label="hyprcomp")
+        logo_text.add_css_class("toolbar-logo-text")
+        toolbar.append(logo_text)
+
+        open_btn = Gtk.Button(label="\uf07c   open project")
+        open_btn.set_focusable(False)
+        open_btn.add_css_class("toolbar-btn")
+        open_btn.connect("clicked", self._on_new_project)
+        toolbar.append(open_btn)
+
+        sep1 = Gtk.Label(label=" / ")
+        sep1.add_css_class("toolbar-sep")
+        toolbar.append(sep1)
+
+        close_all_btn = Gtk.Button(label="\uf00d  close all")
+        close_all_btn.set_focusable(False)
+        close_all_btn.add_css_class("toolbar-btn")
+        close_all_btn.add_css_class("toolbar-btn-danger")
+        close_all_btn.connect("clicked", self._on_close_all)
+        toolbar.append(close_all_btn)
+
+        spacer = Gtk.Label()
+        spacer.set_hexpand(True)
+        toolbar.append(spacer)
+
+        hints = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        for key, desc in [
+            ("hjkl", "navigate"), ("enter", "go"), ("1-9", "jump"),
+            ("x", "close"), ("n", "new"), ("q", "quit"),
+        ]:
+            item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            key_lbl = Gtk.Label(label=key)
+            key_lbl.add_css_class("toolbar-shortcut-key")
+            item.append(key_lbl)
+            desc_lbl = Gtk.Label(label=desc)
+            desc_lbl.add_css_class("toolbar-shortcuts")
+            item.append(desc_lbl)
+            hints.append(item)
+        hints.set_valign(Gtk.Align.CENTER)
+        toolbar.append(hints)
+
+        outer.append(toolbar)
+
         # Per-row max column (highest occupied or active)
         row_max = {}
         for row in self.projects:
@@ -745,15 +797,6 @@ class OverviewApp(Gtk.Application):
             group.append(row_box)
             outer.append(group)
 
-        # "+ New Project" button
-        self.new_btn = Gtk.Button(label="+ New Project")
-        self.new_btn.set_focusable(False)
-        self.new_btn.add_css_class("new-btn")
-        self.new_btn.set_halign(Gtk.Align.CENTER)
-        self.new_btn.set_margin_top(20)
-        self.new_btn.connect("clicked", self._on_new_project)
-        outer.append(self.new_btn)
-
         self.win.set_child(outer)
 
     # ── Thumbnails ───────────────────────────────────────────────────────────
@@ -812,16 +855,13 @@ class OverviewApp(Gtk.Application):
     # ── Event handlers ──────────────────────────────────────────────────────
 
     def _on_key(self, _ctrl, keyval, _keycode, _state):
-        if self.creating_project:
-            if keyval == Gdk.KEY_Escape:
-                self._cancel_create()
-                return True
-            return False
-
         # Confirm dialog mode
         if self._confirm_row is not None:
             if keyval in (Gdk.KEY_Return, Gdk.KEY_y):
-                self._confirm_delete()
+                if self._confirm_row == "all":
+                    self._confirm_close_all()
+                else:
+                    self._confirm_delete()
                 return True
             if keyval in (Gdk.KEY_Escape, Gdk.KEY_q, Gdk.KEY_n):
                 self._dismiss_confirm()
@@ -875,6 +915,10 @@ class OverviewApp(Gtk.Application):
         if keyval in (Gdk.KEY_x, Gdk.KEY_Delete) and self.hovered_row is not None:
             name = self.projects.get(self.hovered_row, "")
             self._show_delete_confirm(self.hovered_row, name)
+            return True
+
+        if keyval == Gdk.KEY_n:
+            self._on_new_project()
             return True
 
         return False
@@ -989,6 +1033,47 @@ class OverviewApp(Gtk.Application):
         self._sel_col = saved_col
         self._update_selection()
 
+    def _on_close_all(self, _btn=None):
+        """Show confirm dialog for closing all workspaces."""
+        self._confirm_row = "all"
+        overlay = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+            spacing=12,
+        )
+        overlay.add_css_class("confirm-box")
+
+        lbl = Gtk.Label(label="Close all workspaces?")
+        lbl.add_css_class("confirm-label")
+        overlay.append(lbl)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                          halign=Gtk.Align.CENTER)
+        yes = Gtk.Button(label="Yes")
+        yes.add_css_class("confirm-yes")
+        yes.set_focusable(False)
+        yes.connect("clicked", lambda _b: self._confirm_close_all())
+        btn_box.append(yes)
+
+        no = Gtk.Button(label="No")
+        no.add_css_class("confirm-no")
+        no.set_focusable(False)
+        no.connect("clicked", lambda _b: self._dismiss_confirm())
+        btn_box.append(no)
+
+        overlay.append(btn_box)
+        self._confirm_overlay = overlay
+        self.win.set_child(overlay)
+
+    def _confirm_close_all(self):
+        """Close all projects and their windows."""
+        for row in list(self.projects.keys()):
+            self._delete_project_row(row)
+        self._confirm_row = None
+        self._confirm_overlay = None
+        self._reload_grid()
+
     def _delete_project_row(self, row):
         """Close all windows in a project row, delete it, and reload."""
         for col in range(1, 11):
@@ -1003,184 +1088,11 @@ class OverviewApp(Gtk.Application):
         subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
         self._reload_grid()
 
-    def _on_new_project(self, _btn):
-        if self.creating_project:
-            return
-        self.creating_project = True
-
-        parent = self.new_btn.get_parent()
-        parent.remove(self.new_btn)
-
-        picker = self._build_folder_picker()
-        self._picker = picker
-        parent.append(picker)
-
-    def _build_folder_picker(self):
-        """Build the folder picker FlowBox with subproject support."""
-        existing_names = set(self.projects.values())
-        folders = []
-        if os.path.isdir(PROJECTS_DIR):
-            for name in sorted(os.listdir(PROJECTS_DIR)):
-                path = os.path.join(PROJECTS_DIR, name)
-                if os.path.isdir(path) and not name.startswith("."):
-                    folders.append((name, path))
-
-        picker = Gtk.FlowBox()
-        picker.set_selection_mode(Gtk.SelectionMode.NONE)
-        picker.set_max_children_per_line(6)
-        picker.set_column_spacing(8)
-        picker.set_row_spacing(8)
-        picker.set_halign(Gtk.Align.CENTER)
-        picker.add_css_class("folder-picker")
-        picker.set_margin_top(12)
-
-        for name, path in folders:
-            subprojects = load_subprojects(path)
-            if subprojects:
-                # Check if all subprojects are already registered
-                all_used = all(
-                    f"{name}/{sp_rel}" in existing_names
-                    for _, _, sp_rel in subprojects
-                )
-                btn = Gtk.Button(label=f"{name} \u203a")
-                btn.add_css_class("folder-btn")
-                if all_used:
-                    btn.add_css_class("folder-btn-used")
-                    btn.set_sensitive(False)
-                else:
-                    btn.connect(
-                        "clicked", self._on_parent_folder_select,
-                        name, path, picker,
-                    )
-            else:
-                used = name in existing_names
-                btn = Gtk.Button(label=name)
-                btn.add_css_class("folder-btn")
-                if used:
-                    btn.add_css_class("folder-btn-used")
-                    btn.set_sensitive(False)
-                else:
-                    btn.connect("clicked", self._on_folder_select, name, picker)
-            picker.append(btn)
-
-        if not folders:
-            lbl = Gtk.Label(label="No folders found in ~/projects")
-            lbl.add_css_class("confirm-label")
-            picker.append(lbl)
-
-        return picker
-
-    def _on_parent_folder_select(self, _btn, parent_name, parent_path, old_picker):
-        """Replace picker with subproject buttons + back button."""
-        container = old_picker.get_parent()
-        container.remove(old_picker)
-
-        existing_names = set(self.projects.values())
-        subprojects = load_subprojects(parent_path)
-
-        picker = Gtk.FlowBox()
-        picker.set_selection_mode(Gtk.SelectionMode.NONE)
-        picker.set_max_children_per_line(6)
-        picker.set_column_spacing(8)
-        picker.set_row_spacing(8)
-        picker.set_halign(Gtk.Align.CENTER)
-        picker.add_css_class("folder-picker")
-        picker.set_margin_top(12)
-
-        # Back button
-        back_btn = Gtk.Button(label="\u2039 Back")
-        back_btn.add_css_class("folder-btn")
-        back_btn.connect("clicked", self._on_subproject_back, picker)
-        picker.append(back_btn)
-
-        for display, abs_path, rel_path in subprojects:
-            proj_name = f"{parent_name}/{rel_path}"
-            nested = load_subprojects(abs_path)
-            if nested:
-                all_used = all(
-                    f"{proj_name}/{sp_rel}" in existing_names
-                    for _, _, sp_rel in nested
-                )
-                btn = Gtk.Button(label=f"{display} \u203a")
-                btn.add_css_class("folder-btn")
-                if all_used:
-                    btn.add_css_class("folder-btn-used")
-                    btn.set_sensitive(False)
-                else:
-                    btn.connect(
-                        "clicked", self._on_parent_folder_select,
-                        proj_name, abs_path, picker,
-                    )
-            else:
-                used = proj_name in existing_names
-                btn = Gtk.Button(label=display)
-                btn.add_css_class("folder-btn")
-                if used:
-                    btn.add_css_class("folder-btn-used")
-                    btn.set_sensitive(False)
-                else:
-                    btn.connect(
-                        "clicked", self._on_folder_select,
-                        proj_name, picker, abs_path,
-                    )
-            picker.append(btn)
-
-        self._picker = picker
-        container.append(picker)
-
-    def _on_subproject_back(self, _btn, picker):
-        """Return to main folder picker."""
-        container = picker.get_parent()
-        container.remove(picker)
-        new_picker = self._build_folder_picker()
-        self._picker = new_picker
-        container.append(new_picker)
-
-    def _cancel_create(self):
-        if hasattr(self, "_picker") and self._picker:
-            parent = self._picker.get_parent()
-            parent.remove(self._picker)
-            self._picker = None
-            self.creating_project = False
-            parent.append(self.new_btn)
-
-    def _on_folder_select(self, _btn, name, picker, project_dir=None):
-        # Create the project
-        subprocess.run([HYPRCOMP_BIN, "create", name], capture_output=True)
-
-        # Find the new row
-        projects = load_projects()
-        row = None
-        for r, n in projects.items():
-            if n == name:
-                row = r
-                break
-        if row is None:
-            self.creating_project = False
-            self._reload_grid()
-            return
-
-        if project_dir is None:
-            project_dir = os.path.join(PROJECTS_DIR, name)
-
-        windows_config = load_project_config(project_dir)
-
-        # Update state and switch to column 1
-        try:
-            with open(STATE_FILE, "w") as f:
-                f.write(f"current_row={row}\n")
-        except Exception:
-            pass
-
-        self.creating_project = False
+    def _on_new_project(self, _btn=None):
         self._hide()
+        menu_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hyprcomp-menu")
+        subprocess.Popen([menu_bin], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Launch apps in background (needs delays for windows to map)
-        threading.Thread(
-            target=self._launch_project_apps,
-            args=(project_dir, row, name, windows_config),
-            daemon=True,
-        ).start()
 
     def _launch_project_apps(self, project_dir, row, name, windows_config):
         """Launch apps sequentially, waiting for each window to map."""

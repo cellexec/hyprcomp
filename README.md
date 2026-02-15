@@ -15,13 +15,13 @@ Project C:       ws 21         ws 22         ws 23
 
 - **3-finger horizontal swipe** - switch between windows in current project (row-bounded)
 - **3-finger vertical swipe** - switch between projects (preserves column position)
-- **SUPER+1-9** - project-relative workspace switching (column N of current row)
+- **SUPER+1-0** - project-relative workspace switching (column N of current row)
 - **SUPER+CTRL+UP/DOWN** - switch projects via keyboard
-- **SUPER+SHIFT+1-9** - move window to column N of current row
+- **SUPER+SHIFT+1-0** - move window to column N of current row
 - **Directional animations** - horizontal slide for column switches, vertical slide for project switches
 - **Waybar integration** - project name + row-aware workspace buttons with click support
 - **Workspace overview** - fullscreen overlay showing all projects and workspaces in a 2D grid (SUPER+Tab), with cached workspace screenshots, keyboard shortcuts, and live gesture tracking
-- **Project launcher** - create new projects from ~/projects folders; auto-launches claude code, chromium (isolated profile), and nvim
+- **Project launcher** - create new projects from ~/projects folders via walker menu (SUPER+N); launches configured apps per `.hyprcomp.toml`
 - **Auto-reorder** - deleting a project compacts row IDs and moves windows so new projects always append at the end
 - **Persistent state** - project names survive reboots
 
@@ -29,6 +29,8 @@ Project C:       ws 21         ws 22         ws 23
 
 - Hyprland
 - jq
+- alacritty (for terminal windows)
+- walker (for project launcher menu)
 - waybar (optional, for bar integration)
 - Python 3.11+ with PyGObject, gtk4-layer-shell (optional, for workspace overview)
 - grim (optional, for workspace screenshots in overview)
@@ -117,7 +119,7 @@ killall waybar; waybar &disown
 
 ### Create projects
 
-From the overview (SUPER+Tab), click "+ New Project" to pick a folder from `~/projects/`. Selecting a folder creates the project and launches windows based on its config (see below). Folders with subprojects show a `›` suffix and expand into a sub-picker.
+Press SUPER+N or click "open project" in the overview toolbar to pick a folder from `~/projects/` via walker. Selecting a folder creates the project and launches windows based on its config (see below). Folders with subprojects show a `›` suffix and expand into a sub-picker.
 
 Or from the command line:
 
@@ -183,8 +185,8 @@ Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve 
 | Previous window (left) | 3-finger swipe right | SUPER+1 |
 | Next project (down) | 3-finger swipe up | SUPER+CTRL+DOWN |
 | Previous project (up) | 3-finger swipe down | SUPER+CTRL+UP |
-| Move window to column N | | SUPER+SHIFT+N |
-| Jump to column N | | SUPER+N |
+| Move window to column N | | SUPER+SHIFT+1-0 |
+| Jump to column N | | SUPER+1-0 |
 | Workspace overview | | SUPER+Tab |
 | New project (walker menu) | | SUPER+N |
 | Restart overview daemon | | SUPER+R |
@@ -195,13 +197,13 @@ Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve 
 |-----|--------|
 | Arrow keys / h,j,k,l | Navigate between workspaces |
 | Enter | Switch to selected workspace |
-| 1-9 | Select first window of Nth project |
-| Click cell | Switch to that workspace |
+| 1-9 | Jump to Nth project |
 | d | Close all windows in selected workspace |
 | a | Open new workspace at end of selected project |
+| n | Open new project |
 | x / Delete | Close selected project (with confirmation) |
 | y / Enter | Confirm action |
-| n / Escape / q | Cancel action or close overlay |
+| Escape / q | Cancel or close overlay |
 
 ### Manage projects
 
