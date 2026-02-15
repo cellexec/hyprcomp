@@ -551,8 +551,10 @@ class OverviewApp(Gtk.Application):
                 btn.set_size_request(CELL_W, CELL_H)
                 btn.set_overflow(Gtk.Overflow.HIDDEN)
 
-                if is_ws_active and self.screenshot_texture:
-                    pic = Gtk.Picture.new_for_paintable(self.screenshot_texture)
+                # Try screenshot: fresh for active ws, cached for others
+                thumb = self._get_thumb(ws, is_ws_active)
+                if thumb:
+                    pic = Gtk.Picture.new_for_paintable(thumb)
                     pic.set_size_request(CELL_W, CELL_H)
                     pic.set_content_fit(Gtk.ContentFit.COVER)
                     btn.set_child(pic)
@@ -596,6 +598,20 @@ class OverviewApp(Gtk.Application):
         outer.append(self.new_btn)
 
         self.win.set_child(outer)
+
+    # ── Thumbnails ───────────────────────────────────────────────────────────
+
+    def _get_thumb(self, ws_id, is_active):
+        """Get screenshot texture: fresh capture for active ws, cached for others."""
+        if is_active:
+            return self.screenshot_texture
+        path = os.path.join(CACHE_DIR, f"ws-{ws_id}.jpg")
+        if os.path.isfile(path):
+            try:
+                return Gdk.Texture.new_from_filename(path)
+            except Exception:
+                pass
+        return None
 
     # ── Hover tracking ──────────────────────────────────────────────────────
 

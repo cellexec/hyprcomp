@@ -106,6 +106,14 @@ set_animation() {
     hyprctl keyword animation "workspaces, 1, 3, default, $1" > /dev/null
 }
 
+capture_thumb() {
+    # Capture a thumbnail of the current workspace before switching away
+    local ws=$1
+    local dir="$HOME/.cache/hyprcomp/thumbs"
+    mkdir -p "$dir"
+    grim -t jpeg -q 50 -s 0.25 "$dir/ws-${ws}.jpg" 2>/dev/null &
+}
+
 # --- Commands ---
 
 cmd_up() {
@@ -144,6 +152,7 @@ cmd_up() {
     local target_ws
     target_ws=$(row_col_to_workspace "$target_row" "$col")
     echo "current_row=$target_row" > "$STATE_FILE"
+    capture_thumb "$ws"
     set_animation slidevert
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
@@ -189,6 +198,7 @@ cmd_down() {
     local target_ws
     target_ws=$(row_col_to_workspace "$target_row" "$col")
     echo "current_row=$target_row" > "$STATE_FILE"
+    capture_thumb "$ws"
     set_animation slidevert
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
@@ -210,6 +220,7 @@ cmd_left() {
 
     local target_ws
     target_ws=$(row_col_to_workspace "$row" $((col - 1)))
+    capture_thumb "$ws"
     set_animation slide
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
@@ -234,6 +245,7 @@ cmd_right() {
         return 0
     fi
 
+    capture_thumb "$ws"
     set_animation slide
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
@@ -247,10 +259,11 @@ cmd_go() {
     fi
 
     sync_state
-    local row
+    local ws row target_ws
+    ws=$(get_active_workspace)
     row=$(get_current_row)
-    local target_ws
     target_ws=$(row_col_to_workspace "$row" "$col")
+    capture_thumb "$ws"
     set_animation slide
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
