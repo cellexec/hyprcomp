@@ -20,7 +20,9 @@ Project C:       ws 21         ws 22         ws 23
 - **SUPER+SHIFT+1-9** - move window to column N of current row
 - **Directional animations** - horizontal slide for column switches, vertical slide for project switches
 - **Waybar integration** - project name + row-aware workspace buttons with click support
-- **Workspace overview** - fullscreen overlay showing all projects and workspaces in a 2D grid (SUPER+Tab), with cached workspace screenshots, keyboard shortcuts (d=close, a=new, q=quit), and live gesture tracking
+- **Workspace overview** - fullscreen overlay showing all projects and workspaces in a 2D grid (SUPER+Tab), with cached workspace screenshots, keyboard shortcuts, and live gesture tracking
+- **Project launcher** - create new projects from ~/projects folders; auto-launches claude code, chromium (isolated profile), and nvim
+- **Auto-reorder** - deleting a project compacts row IDs and moves windows so new projects always append at the end
 - **Persistent state** - project names survive reboots
 
 ## Dependencies
@@ -115,6 +117,13 @@ killall waybar; waybar &disown
 
 ### Create projects
 
+From the overview (SUPER+Tab), click "+ New Project" to pick a folder from `~/projects/`. Selecting a folder creates the project and launches:
+- **Column 1** - terminal with claude code
+- **Column 2** - chromium (isolated profile per project)
+- **Column 3** - terminal with nvim
+
+Or from the command line:
+
 ```bash
 hyprcomp create homelab        # Row 0, workspaces 1-10
 hyprcomp create guitar-studio  # Row 1, workspaces 11-20
@@ -133,6 +142,16 @@ hyprcomp create cooking-book   # Row 2, workspaces 21-30
 | Jump to column N | | SUPER+N |
 | Workspace overview | | SUPER+Tab |
 
+### Overview keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| Click cell | Switch to that workspace |
+| d | Close all windows in hovered workspace |
+| a | Open new workspace at end of hovered project |
+| x | Delete hovered project (closes all windows) |
+| q / Escape | Close overlay |
+
 ### Manage projects
 
 ```bash
@@ -141,6 +160,7 @@ hyprcomp status            # Current workspace, row, and column
 hyprcomp rename new-name   # Rename current project
 hyprcomp delete            # Remove current project registration
 hyprcomp overview          # Toggle workspace overview overlay
+hyprcomp restart           # Restart the overview daemon
 ```
 
 ## How it works
@@ -154,6 +174,7 @@ The overview overlay (`hyprcomp-overview`) is a GTK4 + layer-shell Python app th
 State is stored in `~/.config/hyprcomp/`:
 - `state` - current row number
 - `projects` - row-to-name mapping (e.g., `0:homelab`)
+- `chromium/<name>/` - isolated Chromium profiles per project
 
 Workspace thumbnails are cached in `~/.cache/hyprcomp/thumbs/`.
 
