@@ -358,6 +358,7 @@ cmd_delete() {
 
     sed -i "/^${row}:/d" "$PROJECTS_FILE"
     echo "Deleted project '$name' (row $row)"
+    cmd_reorder
 }
 
 cmd_delete_row() {
@@ -370,6 +371,62 @@ cmd_delete_row() {
     name=$(get_project_name "$row")
     sed -i "/^${row}:/d" "$PROJECTS_FILE"
     echo "Deleted project '$name' (row $row)"
+    cmd_reorder
+}
+
+cmd_reorder() {
+    [[ ! -f "$PROJECTS_FILE" ]] || [[ ! -s "$PROJECTS_FILE" ]] && return
+
+    # Read remaining projects sorted by row
+    local -a old_rows old_names
+    while IFS=: read -r row name; do
+        old_rows+=("$row")
+        old_names+=("$name")
+    done < <(sort -t: -k1 -n "$PROJECTS_FILE")
+
+    # Check if reordering is needed
+    local needs=false
+    for i in "${!old_rows[@]}"; do
+        [[ ${old_rows[$i]} -ne $i ]] && needs=true && break
+    done
+    $needs || return
+
+    # Snapshot all clients before moving anything
+    local clients_json
+    clients_json=$(hyprctl clients -j)
+
+    # Track where the current row ends up
+    local cur_row
+    cur_row=$(get_current_row)
+    local new_cur_row=0
+
+    # Move windows for each row that changes
+    for i in "${!old_rows[@]}"; do
+        local old=${old_rows[$i]}
+        local new=$i
+
+        [[ $old -eq $cur_row ]] && new_cur_row=$new
+        [[ $old -eq $new ]] && continue
+
+        for col in $(seq 1 10); do
+            local old_ws=$((old * 10 + col))
+            local new_ws=$((new * 10 + col))
+            echo "$clients_json" | jq -r --argjson ws "$old_ws" \
+                '.[] | select(.workspace.id == $ws) | .address' | while read -r addr; do
+                [[ -n "$addr" ]] && hyprctl dispatch movetoworkspacesilent "$new_ws,address:$addr" > /dev/null
+            done
+        done
+    done
+
+    # Rewrite projects file
+    > "$PROJECTS_FILE"
+    for i in "${!old_rows[@]}"; do
+        echo "${i}:${old_names[$i]}" >> "$PROJECTS_FILE"
+    done
+
+    # Update state
+    echo "current_row=$new_cur_row" > "$STATE_FILE"
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
 }
 
 cmd_overview() {
@@ -406,6 +463,7 @@ case "$cmd" in
     rename) cmd_rename "$@" ;;
     delete)     cmd_delete ;;
     delete-row) cmd_delete_row "$@" ;;
+    reorder)    cmd_reorder ;;
     overview)   cmd_overview ;;
     restart)    cmd_restart ;;
     help)
@@ -424,6 +482,7 @@ case "$cmd" in
         echo "  rename <name>   Rename current project row"
         echo "  delete          Unregister current project row"
         echo "  delete-row <N>  Unregister project at row N (closes windows)"
+        echo "  reorder         Compact row IDs (close gaps from deleted projects)"
         echo "  overview        Toggle workspace overview overlay"
         echo "  restart         Restart the overview daemon"
         ;;
