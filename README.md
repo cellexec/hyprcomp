@@ -1,0 +1,149 @@
+# HyprComp
+
+2D project-based workspace grid for Hyprland.
+
+Organizes workspaces into a grid where rows are projects and columns are windows within a project. Navigate horizontally between windows and vertically between projects with gestures, keybindings, and a waybar integration that shows only the current project's workspaces.
+
+```
+                 Column 1      Column 2      Column 3
+Project A:       ws 1          ws 2          ws 3
+Project B:       ws 11         ws 12         ws 13
+Project C:       ws 21         ws 22         ws 23
+```
+
+## Features
+
+- **3-finger horizontal swipe** - switch between windows in current project (row-bounded)
+- **3-finger vertical swipe** - switch between projects (preserves column position)
+- **SUPER+1-9** - project-relative workspace switching (column N of current row)
+- **SUPER+CTRL+UP/DOWN** - switch projects via keyboard
+- **SUPER+SHIFT+1-9** - move window to column N of current row
+- **Directional animations** - horizontal slide for column switches, vertical slide for project switches
+- **Waybar integration** - project name + row-aware workspace buttons with click support
+- **Persistent state** - project names survive reboots
+
+## Dependencies
+
+- Hyprland
+- jq
+- waybar (optional, for bar integration)
+
+## Installation
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/your-user/hyprcomp ~/projects/hyprcomp
+chmod +x ~/projects/hyprcomp/hyprcomp
+```
+
+### 2. Hyprland keybindings
+
+Copy the keybinding config and source it from your `hyprland.conf`:
+
+```bash
+cp ~/projects/hyprcomp/config/hypr/hyprcomp.conf ~/.config/hypr/hyprcomp.conf
+```
+
+Add this line at the **end** of `~/.config/hypr/hyprland.conf` (must be last to override default SUPER+1-9 bindings):
+
+```conf
+source = ~/.config/hypr/hyprcomp.conf
+```
+
+### 3. Gesture bindings
+
+In your `~/.config/hypr/input.conf`, **remove** the default horizontal workspace gesture:
+
+```conf
+# Remove this line:
+gesture = 3, horizontal, workspace
+```
+
+**Replace** it with the hyprcomp gestures (or source the provided config):
+
+```conf
+# 3-finger horizontal: switch columns within project row
+gesture = 3, l, dispatcher, exec, ~/projects/hyprcomp/hyprcomp right
+gesture = 3, r, dispatcher, exec, ~/projects/hyprcomp/hyprcomp left
+
+# 3-finger vertical: switch between projects
+gesture = 3, u, dispatcher, exec, ~/projects/hyprcomp/hyprcomp down
+gesture = 3, d, dispatcher, exec, ~/projects/hyprcomp/hyprcomp up
+```
+
+### 4. Waybar integration (optional)
+
+Copy the scripts:
+
+```bash
+cp ~/projects/hyprcomp/config/waybar/scripts/project.sh ~/.config/waybar/scripts/
+cp ~/projects/hyprcomp/config/waybar/scripts/ws-button.sh ~/.config/waybar/scripts/
+```
+
+In your waybar `config.jsonc`, replace `"hyprland/workspaces"` in `modules-left` with:
+
+```json
+"modules-left": ["custom/project", "custom/ws-1", "custom/ws-2", "custom/ws-3", "custom/ws-4", "custom/ws-5", "custom/ws-6", "custom/ws-7", "custom/ws-8", "custom/ws-9"],
+```
+
+Then merge the module definitions from `config/waybar/hyprcomp-modules.jsonc` into your config.
+
+Add the styles from `config/waybar/hyprcomp.css` to your waybar `style.css`. The CSS uses Catppuccin Mocha color variables -- adjust to match your theme.
+
+### 5. Reload
+
+```bash
+hyprctl reload
+killall waybar; waybar &disown
+```
+
+## Usage
+
+### Create projects
+
+```bash
+hyprcomp create homelab        # Row 0, workspaces 1-10
+hyprcomp create guitar-studio  # Row 1, workspaces 11-20
+hyprcomp create cooking-book   # Row 2, workspaces 21-30
+```
+
+### Navigate
+
+| Action | Gesture | Keybinding |
+|--------|---------|------------|
+| Next window (right) | 3-finger swipe left | SUPER+2, SUPER+3, ... |
+| Previous window (left) | 3-finger swipe right | SUPER+1 |
+| Next project (down) | 3-finger swipe up | SUPER+CTRL+DOWN |
+| Previous project (up) | 3-finger swipe down | SUPER+CTRL+UP |
+| Move window to column N | | SUPER+SHIFT+N |
+| Jump to column N | | SUPER+N |
+
+### Manage projects
+
+```bash
+hyprcomp list              # Show all projects (* marks current)
+hyprcomp status            # Current workspace, row, and column
+hyprcomp rename new-name   # Rename current project
+hyprcomp delete            # Remove current project registration
+```
+
+## How it works
+
+Each project gets a row of 10 workspace slots. Row 0 uses workspaces 1-10, row 1 uses 11-20, and so on (up to 9 rows).
+
+The `hyprcomp` script translates all navigation into absolute workspace numbers and dispatches via `hyprctl`. Before each dispatch, it sets the animation direction dynamically -- `slide` for horizontal movement, `slidevert` for vertical -- so transitions feel natural.
+
+State is stored in `~/.config/hyprcomp/`:
+- `state` - current row number
+- `projects` - row-to-name mapping (e.g., `0:homelab`)
+
+The waybar modules replace the built-in `hyprland/workspaces` widget with custom scripts that only show workspaces belonging to the current project row, labeled with column numbers (1-9) instead of absolute workspace IDs.
+
+## Uninstalling
+
+1. Remove `source = ~/.config/hypr/hyprcomp.conf` from `hyprland.conf`
+2. Restore `gesture = 3, horizontal, workspace` in `input.conf`
+3. Restore `"hyprland/workspaces"` in your waybar config
+4. `hyprctl reload && killall waybar && waybar &disown`
+5. Remove `~/.config/hyprcomp/` and `~/.config/hypr/hyprcomp.conf`
