@@ -1009,17 +1009,34 @@ class OverviewApp(Gtk.Application):
 
         for display, abs_path, rel_path in subprojects:
             proj_name = f"{parent_name}/{rel_path}"
-            used = proj_name in existing_names
-            btn = Gtk.Button(label=display)
-            btn.add_css_class("folder-btn")
-            if used:
-                btn.add_css_class("folder-btn-used")
-                btn.set_sensitive(False)
-            else:
-                btn.connect(
-                    "clicked", self._on_folder_select,
-                    proj_name, picker, abs_path,
+            nested = load_subprojects(abs_path)
+            if nested:
+                all_used = all(
+                    f"{proj_name}/{sp_rel}" in existing_names
+                    for _, _, sp_rel in nested
                 )
+                btn = Gtk.Button(label=f"{display} \u203a")
+                btn.add_css_class("folder-btn")
+                if all_used:
+                    btn.add_css_class("folder-btn-used")
+                    btn.set_sensitive(False)
+                else:
+                    btn.connect(
+                        "clicked", self._on_parent_folder_select,
+                        proj_name, abs_path, picker,
+                    )
+            else:
+                used = proj_name in existing_names
+                btn = Gtk.Button(label=display)
+                btn.add_css_class("folder-btn")
+                if used:
+                    btn.add_css_class("folder-btn-used")
+                    btn.set_sensitive(False)
+                else:
+                    btn.connect(
+                        "clicked", self._on_folder_select,
+                        proj_name, picker, abs_path,
+                    )
             picker.append(btn)
 
         self._picker = picker
@@ -1098,7 +1115,7 @@ class OverviewApp(Gtk.Application):
 
             if win.get("terminal"):
                 hyprctl_dispatch(
-                    f"exec alacritty --working-directory {cwd} -e zsh -c '{cmd}; exec zsh'"
+                    f"exec alacritty --working-directory {cwd} -e zsh -ic '{cmd}; exec zsh'"
                 )
             elif win.get("browser"):
                 data_dir = os.path.expanduser(f"~/.config/hyprcomp/chromium/{name}")

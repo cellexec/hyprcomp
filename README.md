@@ -50,7 +50,7 @@ Copy the keybinding config and source it from your `hyprland.conf`:
 cp ~/projects/hyprcomp/config/hypr/hyprcomp.conf ~/.config/hypr/hyprcomp.conf
 ```
 
-Add this line at the **end** of `~/.config/hypr/hyprland.conf` (must be last to override default SUPER+1-9 bindings):
+Add this line at the **end** of `~/.config/hypr/hyprland.conf` (the config unbinds default SUPER+1-9 workspace switching and replaces it with project-relative navigation):
 
 ```conf
 source = ~/.config/hypr/hyprcomp.conf
@@ -163,6 +163,8 @@ path = "flux"
 path = "monorepo/apps/web"
 name = "monorepo-web"       # Optional display name
 ```
+
+Subprojects can nest — if a subproject directory itself contains a `.hyprcomp.toml` with `[[subprojects]]`, it expands further (e.g., `homelab ›` → `monorepo ›` → individual apps).
 
 Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve to the full filesystem path.
 
