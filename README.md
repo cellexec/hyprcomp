@@ -65,7 +65,7 @@ Row-aware workspace buttons showing only the current project's workspaces, with 
 
 Define which apps to launch per project in `.hyprcomp.toml` -- terminal apps, isolated Chromium profiles, environment-based URLs.
 
-![Config](showcase/config.jpg)
+![Config](showcase/config.png)
 
 ## Keybindings
 
