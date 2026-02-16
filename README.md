@@ -61,6 +61,12 @@ Row-aware workspace buttons showing only the current project's workspaces, with 
 
 ![Waybar](showcase/waybar.gif)
 
+### Live theme switcher
+
+Switch between 10 themes instantly from the overview toolbar or by pressing `t`. Supports mocha, nord, dracula, gruvbox, tokyo-night, rose-pine, solarized, everforest, kanagawa, and one-dark. Choice persists to `config.toml`.
+
+![Theme Switcher](showcase/theme-switcher.png)
+
 ### Per-project app config
 
 Define which apps to launch per project in `.hyprcomp.toml` -- terminal apps, isolated Chromium profiles, environment-based URLs.
@@ -203,8 +209,6 @@ terminal = true
 ### Theme
 
 Set a theme for the overview in `~/.config/hyprcomp/config.toml`. You can also switch themes live from the overview toolbar (colored dots) or by pressing `t` to cycle through them.
-
-![Theme Switcher](showcase/theme-switcher.png)
 
 ```toml
 theme = "mocha"  # mocha, nord, dracula, gruvbox, tokyo-night, rose-pine, solarized, everforest, kanagawa, one-dark
