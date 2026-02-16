@@ -7,10 +7,21 @@ set -euo pipefail
 PROJECTS_DIR="$HOME/projects"
 CONFIG_DIR="$HOME/.config/hyprcomp"
 PROJECTS_FILE="$CONFIG_DIR/projects"
+CONFIG_TOML="$CONFIG_DIR/config.toml"
 OVERVIEW="$(dirname "$0")/hyprcomp-overview"
 
 get_existing() {
     [[ -f "$PROJECTS_FILE" ]] && cut -d: -f2 "$PROJECTS_FILE" || true
+}
+
+get_excludes() {
+    [[ -f "$CONFIG_TOML" ]] || return
+    sed -n 's/^exclude *= *\[//p' "$CONFIG_TOML" | tr -d '"]' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep .
+}
+
+is_excluded() {
+    local name="$1"
+    echo "$EXCLUDES" | grep -qxF "$name"
 }
 
 has_subprojects() {
@@ -34,6 +45,7 @@ build_menu() {
     local parent_dir="$1" prefix="$2" show_back="$3"
     local existing
     existing=$(get_existing)
+    EXCLUDES=$(get_excludes)
 
     [[ "$show_back" == "1" ]] && echo "‹ Back"
 
@@ -43,6 +55,7 @@ build_menu() {
             local name
             name=$(basename "$dir")
             [[ "$name" == .* ]] && continue
+            is_excluded "$name" && continue
 
             if has_subprojects "$dir"; then
                 local all_used=true
@@ -60,6 +73,7 @@ build_menu() {
             [[ -d "$sp_dir" ]] || continue
             local display
             display=$(basename "$sp")
+            is_excluded "$display" && continue
             local full_name="${prefix}${sp}"
 
             if has_subprojects "$sp_dir"; then

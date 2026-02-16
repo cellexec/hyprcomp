@@ -207,6 +207,16 @@ Window types:
 - `url_env = "VAR"` -- reads URL from the project's `.env` file
 - Neither -- launched as a plain GUI app
 
+### Excluding directories
+
+To hide directories from the project launcher, add an `exclude` list to `~/.config/hyprcomp/config.toml`:
+
+```toml
+exclude = ["__old", "archive"]
+```
+
+Matching is by directory name (basename), so `__old` is skipped everywhere -- both top-level and inside subprojects.
+
 ### Subprojects
 
 For monorepos, define subprojects that appear as separate entries in the launcher:
@@ -250,6 +260,7 @@ hyprcomp restart              Restart overview daemon
 | ------------------------------------- | ----------------------------- |
 | `~/.config/hyprcomp/state`            | Current row number            |
 | `~/.config/hyprcomp/projects`         | Row-to-name mapping           |
+| `~/.config/hyprcomp/config.toml`      | Exclude list and global settings |
 | `~/.config/hyprcomp/defaults.toml`    | Global default windows config |
 | `~/.config/hyprcomp/chromium/<name>/` | Isolated Chromium profiles    |
 | `~/.cache/hyprcomp/thumbs/`           | Workspace screenshot cache    |
