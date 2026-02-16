@@ -4,6 +4,7 @@ set -euo pipefail
 CONFIG_DIR="$HOME/.config/hyprcomp"
 STATE_FILE="$CONFIG_DIR/state"
 PROJECTS_FILE="$CONFIG_DIR/projects"
+DESKTOP_ROW=9
 
 mkdir -p "$CONFIG_DIR"
 
@@ -123,12 +124,13 @@ cmd_up() {
     row=$(workspace_to_row "$ws")
     col=$(workspace_to_col "$ws")
 
-    if [[ $row -le 0 ]]; then
+    # Already at Desktop row (top)
+    if [[ $row -eq $DESKTOP_ROW ]]; then
         echo "Already at the top row"
         return 1
     fi
 
-    # Find the nearest existing row above
+    # Find the nearest existing project row above
     target_row=$((row - 1))
     while [[ $target_row -ge 0 ]]; do
         if row_exists "$target_row"; then
@@ -137,9 +139,9 @@ cmd_up() {
         target_row=$((target_row - 1))
     done
 
+    # No project row above — go to Desktop row
     if [[ $target_row -lt 0 ]]; then
-        echo "No project row above"
-        return 1
+        target_row=$DESKTOP_ROW
     fi
 
     # Clamp column to highest occupied in target row
@@ -153,11 +155,19 @@ cmd_up() {
     target_ws=$(row_col_to_workspace "$target_row" "$col")
     echo "current_row=$target_row" > "$STATE_FILE"
     capture_thumb "$ws"
-    set_animation slidevert
+    if [[ $target_row -eq $DESKTOP_ROW ]]; then
+        set_animation fade
+    else
+        set_animation slidevert
+    fi
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
     local name
-    name=$(get_project_name "$target_row")
+    if [[ $target_row -eq $DESKTOP_ROW ]]; then
+        name="Desktop"
+    else
+        name=$(get_project_name "$target_row")
+    fi
     echo "Switched to row $target_row ($name) workspace $target_ws"
 }
 
@@ -174,18 +184,33 @@ cmd_down() {
         return 1
     fi
 
-    # Find the nearest existing row below
-    target_row=$((row + 1))
-    while [[ $target_row -le $max_row ]]; do
-        if row_exists "$target_row"; then
-            break
+    if [[ $row -eq $DESKTOP_ROW ]]; then
+        # From Desktop, go to first project row
+        target_row=0
+        while [[ $target_row -le $max_row ]]; do
+            if row_exists "$target_row"; then
+                break
+            fi
+            target_row=$((target_row + 1))
+        done
+        if [[ $target_row -gt $max_row ]]; then
+            echo "No project rows below"
+            return 1
         fi
-        target_row=$((target_row + 1))
-    done
+    else
+        # Find the nearest existing row below
+        target_row=$((row + 1))
+        while [[ $target_row -le $max_row ]]; do
+            if row_exists "$target_row"; then
+                break
+            fi
+            target_row=$((target_row + 1))
+        done
 
-    if [[ $target_row -gt $max_row ]]; then
-        echo "Already at the bottom row"
-        return 1
+        if [[ $target_row -gt $max_row ]]; then
+            echo "Already at the bottom row"
+            return 1
+        fi
     fi
 
     # Clamp column to highest occupied in target row
@@ -199,7 +224,11 @@ cmd_down() {
     target_ws=$(row_col_to_workspace "$target_row" "$col")
     echo "current_row=$target_row" > "$STATE_FILE"
     capture_thumb "$ws"
-    set_animation slidevert
+    if [[ $row -eq $DESKTOP_ROW ]]; then
+        set_animation fade
+    else
+        set_animation slidevert
+    fi
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
     local name
@@ -291,7 +320,11 @@ cmd_status() {
     ws=$(get_active_workspace)
     row=$(workspace_to_row "$ws")
     col=$(workspace_to_col "$ws")
-    name=$(get_project_name "$row")
+    if [[ $row -eq $DESKTOP_ROW ]]; then
+        name="Desktop"
+    else
+        name=$(get_project_name "$row")
+    fi
 
     echo "Workspace: $ws"
     echo "Row: $row${name:+ ($name)}"
@@ -299,17 +332,23 @@ cmd_status() {
 }
 
 cmd_list() {
+    sync_state
+    local current_row marker
+    current_row=$(get_current_row)
+
+    # Desktop row — always shown first
+    marker=" "
+    [[ $DESKTOP_ROW -eq $current_row ]] && marker="*"
+    printf "%s Row %d: %s (workspaces %d-%d)\n" "$marker" "$DESKTOP_ROW" "Desktop" \
+        "$(row_col_to_workspace "$DESKTOP_ROW" 1)" "$(row_col_to_workspace "$DESKTOP_ROW" 10)"
+
     if [[ ! -f "$PROJECTS_FILE" ]] || [[ ! -s "$PROJECTS_FILE" ]]; then
         echo "No projects registered. Use 'hyprcomp create <name>' to add one."
         return
     fi
 
-    sync_state
-    local current_row
-    current_row=$(get_current_row)
-
     while IFS=: read -r row name; do
-        local marker=" "
+        marker=" "
         [[ $row -eq $current_row ]] && marker="*"
         printf "%s Row %d: %s (workspaces %d-%d)\n" "$marker" "$row" "$name" \
             "$(row_col_to_workspace "$row" 1)" "$(row_col_to_workspace "$row" 10)"
@@ -363,6 +402,10 @@ cmd_delete() {
 
 cmd_delete_row() {
     local row=${1:?Usage: hyprcomp delete-row <row>}
+    if [[ $row -eq $DESKTOP_ROW ]]; then
+        echo "Cannot delete Desktop row"
+        return 1
+    fi
     if ! row_exists "$row"; then
         echo "Row $row is not a registered project"
         return 1

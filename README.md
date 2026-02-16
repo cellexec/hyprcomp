@@ -6,21 +6,23 @@ Organizes workspaces into a grid where rows are projects and columns are windows
 
 ```
                  Column 1      Column 2      Column 3
-Project A:       ws 1          ws 2          ws 3
-Project B:       ws 11         ws 12         ws 13
-Project C:       ws 21         ws 22         ws 23
+Desktop:         ws 91         ws 92         ws 93        (row 9, always present)
+Project A:       ws 1          ws 2          ws 3         (row 0)
+Project B:       ws 11         ws 12         ws 13        (row 1)
+Project C:       ws 21         ws 22         ws 23        (row 2)
 ```
 
 ## Features
 
+- **Desktop row** - dedicated row (row 9, workspaces 91-100) for standalone apps that persists across "close all"; always shown at the top of the overview
 - **3-finger horizontal swipe** - switch between windows in current project (row-bounded)
 - **3-finger vertical swipe** - switch between projects (preserves column position)
 - **SUPER+1-0** - project-relative workspace switching (column N of current row)
 - **SUPER+CTRL+UP/DOWN** - switch projects via keyboard
 - **SUPER+SHIFT+1-0** - move window to column N of current row
-- **Directional animations** - horizontal slide for column switches, vertical slide for project switches
-- **Waybar integration** - project name + row-aware workspace buttons with click support
-- **Workspace overview** - fullscreen overlay showing all projects and workspaces in a 2D grid (SUPER+Tab), with cached workspace screenshots, keyboard shortcuts, and live gesture tracking
+- **Directional animations** - horizontal slide for column switches, vertical slide for project switches, fade for Desktop transitions
+- **Waybar integration** - project index and name (e.g. `1/4 | myproject`) + row-aware workspace buttons with click support
+- **Workspace overview** - fullscreen overlay showing Desktop and all projects in a 2D grid (SUPER+Tab), with cached workspace screenshots, active badge, keyboard shortcuts, and live gesture tracking
 - **Project launcher** - create new projects from ~/projects folders via walker menu (SUPER+N); launches configured apps per `.hyprcomp.toml`
 - **Auto-reorder** - deleting a project compacts row IDs and moves windows so new projects always append at the end
 - **Persistent state** - project names survive reboots
@@ -197,11 +199,12 @@ Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve 
 |-----|--------|
 | Arrow keys / h,j,k,l | Navigate between workspaces |
 | Enter | Switch to selected workspace |
+| 0 / backtick | Jump to Desktop row |
 | 1-9 | Jump to Nth project |
 | d | Close all windows in selected workspace |
 | a | Open new workspace at end of selected project |
 | n | Open new project |
-| x / Delete | Close selected project (with confirmation) |
+| x / Delete | Close selected project (with confirmation; Desktop cannot be deleted) |
 | y / Enter | Confirm action |
 | Escape / q | Cancel or close overlay |
 
@@ -218,7 +221,7 @@ hyprcomp restart           # Restart the overview daemon
 
 ## How it works
 
-Each project gets a row of 10 workspace slots. Row 0 uses workspaces 1-10, row 1 uses 11-20, and so on (up to 9 rows).
+Each project gets a row of 10 workspace slots. Row 0 uses workspaces 1-10, row 1 uses 11-20, and so on (up to 9 project rows). Row 9 (workspaces 91-100) is reserved as the Desktop row for standalone apps like browsers or Discord that should persist when projects are closed.
 
 The `hyprcomp` script translates all navigation into absolute workspace numbers and dispatches via `hyprctl`. Before each dispatch, it sets the animation direction dynamically -- `slide` for horizontal movement, `slidevert` for vertical -- so transitions feel natural. A screenshot of the current workspace is cached on each switch for the overview thumbnails.
 

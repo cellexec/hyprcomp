@@ -53,6 +53,7 @@ BUILTIN_DEFAULTS = {
 CELL_W, CELL_H = 240, 135
 CELL_GAP = 8
 ROW_GAP = 12
+DESKTOP_ROW = 9
 
 # Catppuccin Mocha palette
 C = {
@@ -360,18 +361,32 @@ window {{
 .ws-cell {{
     all: unset;
     border-radius: 8px;
-    border: 2px solid transparent;
+    border: 3px solid rgba(108, 112, 134, 0.3);
     min-width: {CELL_W}px;
     min-height: {CELL_H}px;
 }}
 .ws-cell:hover {{
-    border-color: rgba(137, 180, 250, 0.5);
-}}
-.ws-cell-active {{
     border-color: #89b4fa;
 }}
+.ws-cell-active {{
+    border-color: transparent;
+}}
+.ws-cell-active .ws-badge {{
+    opacity: 1;
+}}
+.ws-badge {{
+    opacity: 0;
+    background: #89b4fa;
+    color: #1e1e2e;
+    font-size: 9px;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 6px;
+}}
 .ws-cell-selected {{
-    border-color: rgba(137, 180, 250, 0.5);
+    border-color: #89b4fa;
+    border-width: 3px;
 }}
 .del-btn {{
     all: unset;
@@ -391,6 +406,7 @@ window {{
 }}
 .toolbar-logo-icon {{
     color: #89b4fa;
+    font-family: 'JetBrainsMono Nerd Font';
     font-size: 18px;
     margin-right: 6px;
 }}
@@ -570,7 +586,11 @@ class OverviewApp(Gtk.Application):
             pic = Gtk.Picture.new_for_paintable(self.screenshot_texture)
             pic.set_size_request(CELL_W, CELL_H)
             pic.set_content_fit(Gtk.ContentFit.COVER)
-            btn.set_child(pic)
+            overlay = btn.get_child()
+            if isinstance(overlay, Gtk.Overlay):
+                overlay.set_child(pic)
+            else:
+                btn.set_child(pic)
         return False
 
     def _hide(self):
@@ -653,7 +673,7 @@ class OverviewApp(Gtk.Application):
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         toolbar.add_css_class("toolbar")
 
-        logo_icon = Gtk.Label(label="\ue200")
+        logo_icon = Gtk.Label(label="󰣇")
         logo_icon.add_css_class("toolbar-logo-icon")
         toolbar.append(logo_icon)
         logo_text = Gtk.Label(label="hyprcomp")
@@ -683,8 +703,8 @@ class OverviewApp(Gtk.Application):
 
         hints = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         for key, desc in [
-            ("hjkl", "navigate"), ("enter", "go"), ("1-9", "jump"),
-            ("x", "close"), ("n", "new"), ("q", "quit"),
+            ("hjkl", "navigate"), ("enter", "go"), ("0", "desktop"),
+            ("1-9", "jump"), ("x", "close"), ("n", "new"), ("q", "quit"),
         ]:
             item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
             key_lbl = Gtk.Label(label=key)
@@ -724,7 +744,94 @@ class OverviewApp(Gtk.Application):
                 m = max(m, self.active_col)
             row_max[row] = max(m, 1)
 
+        # Desktop row — always present
+        dm = 0
+        for col in range(1, 11):
+            if row_col_to_ws(DESKTOP_ROW, col) in self.ws_clients:
+                dm = col
+        if DESKTOP_ROW == self.active_row:
+            dm = max(dm, self.active_col)
+        row_max[DESKTOP_ROW] = max(dm, 1)
+
         self._row_max = row_max
+
+        # Desktop row — rendered first (top)
+        desktop_group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        desktop_title = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=CELL_GAP,
+        )
+
+        desktop_icon = Gtk.Label(label="󰍹")
+        desktop_icon.add_css_class("project-badge")
+        desktop_title.append(desktop_icon)
+
+        desktop_label = Gtk.Label(label="Desktop", xalign=0.0)
+        desktop_label.set_hexpand(True)
+        desktop_label.add_css_class("project-label")
+        if DESKTOP_ROW == self.active_row:
+            desktop_label.add_css_class("project-label-active")
+        self._row_labels[DESKTOP_ROW] = desktop_label
+        desktop_title.append(desktop_label)
+        desktop_group.append(desktop_title)
+
+        desktop_cells = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=CELL_GAP,
+            valign=Gtk.Align.CENTER,
+        )
+        desktop_cells.set_margin_top(4)
+
+        for col in range(1, row_max[DESKTOP_ROW] + 1):
+            ws = row_col_to_ws(DESKTOP_ROW, col)
+            is_ws_active = ws == self.active_ws_id
+            has_windows = ws in self.ws_clients
+
+            btn = Gtk.Button()
+            btn.set_focusable(False)
+            btn.add_css_class("ws-cell")
+            if is_ws_active:
+                btn.add_css_class("ws-cell-active")
+            btn.set_size_request(CELL_W, CELL_H)
+            btn.set_overflow(Gtk.Overflow.HIDDEN)
+
+            thumb = self._get_thumb(ws, is_ws_active)
+            if thumb:
+                content = Gtk.Picture.new_for_paintable(thumb)
+                content.set_size_request(CELL_W, CELL_H)
+                content.set_content_fit(Gtk.ContentFit.COVER)
+            elif has_windows:
+                content = Gtk.DrawingArea()
+                content.set_size_request(CELL_W, CELL_H)
+                mon = self.ws_mon.get(ws, self.primary_mon)
+                content.set_draw_func(make_synthetic_draw(self.ws_clients[ws], mon))
+            else:
+                content = Gtk.DrawingArea()
+                content.set_size_request(CELL_W, CELL_H)
+                content.set_draw_func(draw_empty)
+
+            overlay = Gtk.Overlay()
+            overlay.set_child(content)
+            badge = Gtk.Label(label="active")
+            badge.add_css_class("ws-badge")
+            badge.set_halign(Gtk.Align.END)
+            badge.set_valign(Gtk.Align.START)
+            overlay.add_overlay(badge)
+            btn.set_child(overlay)
+
+            btn.connect("clicked", self._on_cell_click, ws)
+            self._cells[ws] = btn
+
+            motion = Gtk.EventControllerMotion()
+            motion.connect("enter", self._on_cell_enter, ws, DESKTOP_ROW)
+            motion.connect("leave", self._on_cell_leave)
+            btn.add_controller(motion)
+
+            desktop_cells.append(btn)
+
+        desktop_group.append(desktop_cells)
+        projects_box.append(desktop_group)
 
         # Project rows
         for idx, row in enumerate(sorted(self.projects)):
@@ -733,8 +840,7 @@ class OverviewApp(Gtk.Application):
 
             # Vertical group: title on top, cells below
             group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            if idx > 0:
-                group.set_margin_top(ROW_GAP * 2)
+            group.set_margin_top(ROW_GAP * 2)
 
             # Title row: badge + label + delete button
             title_box = Gtk.Box(
@@ -788,21 +894,27 @@ class OverviewApp(Gtk.Application):
                 # Try screenshot: fresh for active ws, cached for others
                 thumb = self._get_thumb(ws, is_ws_active)
                 if thumb:
-                    pic = Gtk.Picture.new_for_paintable(thumb)
-                    pic.set_size_request(CELL_W, CELL_H)
-                    pic.set_content_fit(Gtk.ContentFit.COVER)
-                    btn.set_child(pic)
+                    content = Gtk.Picture.new_for_paintable(thumb)
+                    content.set_size_request(CELL_W, CELL_H)
+                    content.set_content_fit(Gtk.ContentFit.COVER)
                 elif has_windows:
-                    da = Gtk.DrawingArea()
-                    da.set_size_request(CELL_W, CELL_H)
+                    content = Gtk.DrawingArea()
+                    content.set_size_request(CELL_W, CELL_H)
                     mon = self.ws_mon.get(ws, self.primary_mon)
-                    da.set_draw_func(make_synthetic_draw(self.ws_clients[ws], mon))
-                    btn.set_child(da)
+                    content.set_draw_func(make_synthetic_draw(self.ws_clients[ws], mon))
                 else:
-                    da = Gtk.DrawingArea()
-                    da.set_size_request(CELL_W, CELL_H)
-                    da.set_draw_func(draw_empty)
-                    btn.set_child(da)
+                    content = Gtk.DrawingArea()
+                    content.set_size_request(CELL_W, CELL_H)
+                    content.set_draw_func(draw_empty)
+
+                overlay = Gtk.Overlay()
+                overlay.set_child(content)
+                badge = Gtk.Label(label="active")
+                badge.add_css_class("ws-badge")
+                badge.set_halign(Gtk.Align.END)
+                badge.set_valign(Gtk.Align.START)
+                overlay.add_overlay(badge)
+                btn.set_child(overlay)
 
                 btn.connect("clicked", self._on_cell_click, ws)
                 self._cells[ws] = btn
@@ -864,7 +976,7 @@ class OverviewApp(Gtk.Application):
         """Move keyboard selection by delta row/col."""
         if not self._row_max:
             return
-        rows = sorted(self._row_max.keys())
+        rows = sorted(self._row_max.keys(), key=lambda r: (-1 if r == DESKTOP_ROW else r))
         if self._sel_row is None:
             self._sel_row = rows[0]
             self._sel_col = 1
@@ -917,12 +1029,20 @@ class OverviewApp(Gtk.Application):
                 self._switch_to_ws(row_col_to_ws(self._sel_row, self._sel_col))
             return True
 
-        # Number keys: select first window of Nth project
+        # Number keys: select first window of Nth project (not Desktop)
         if Gdk.KEY_1 <= keyval <= Gdk.KEY_9:
-            rows = sorted(self._row_max.keys())
+            project_rows = sorted(r for r in self._row_max if r != DESKTOP_ROW)
             idx = keyval - Gdk.KEY_1
-            if idx < len(rows):
-                self._sel_row = rows[idx]
+            if idx < len(project_rows):
+                self._sel_row = project_rows[idx]
+                self._sel_col = 1
+                self._update_selection()
+            return True
+
+        # 0 or backtick: jump to Desktop row
+        if keyval in (Gdk.KEY_0, Gdk.KEY_grave):
+            if DESKTOP_ROW in self._row_max:
+                self._sel_row = DESKTOP_ROW
                 self._sel_col = 1
                 self._update_selection()
             return True
@@ -936,6 +1056,8 @@ class OverviewApp(Gtk.Application):
             return True
 
         if keyval in (Gdk.KEY_x, Gdk.KEY_Delete) and self.hovered_row is not None:
+            if self.hovered_row == DESKTOP_ROW:
+                return True
             name = self.projects.get(self.hovered_row, "")
             self._show_delete_confirm(self.hovered_row, name)
             return True
@@ -1067,7 +1189,7 @@ class OverviewApp(Gtk.Application):
         )
         overlay.add_css_class("confirm-box")
 
-        lbl = Gtk.Label(label="Close all workspaces?")
+        lbl = Gtk.Label(label="Close all projects?")
         lbl.add_css_class("confirm-label")
         overlay.append(lbl)
 
@@ -1091,14 +1213,44 @@ class OverviewApp(Gtk.Application):
 
     def _confirm_close_all(self):
         """Close all projects and their windows."""
-        for row in list(self.projects.keys()):
-            self._delete_project_row(row)
+        # Collect all project workspaces, then close windows in one batch
+        # to avoid hyprcomp reorder moving windows between deletions.
+        target_workspaces = set()
+        for row in self.projects:
+            for col in range(1, 11):
+                target_workspaces.add(row_col_to_ws(row, col))
+
+        try:
+            result = subprocess.run(
+                ["hyprctl", "clients", "-j"], capture_output=True, text=True
+            )
+            live_clients = json.loads(result.stdout) if result.returncode == 0 else []
+        except Exception:
+            live_clients = []
+
+        for client in live_clients:
+            if client.get("workspace", {}).get("id") in target_workspaces:
+                addr = client.get("address", "")
+                if addr:
+                    subprocess.run(
+                        ["hyprctl", "dispatch", "closewindow", f"address:{addr}"],
+                        capture_output=True,
+                    )
+
+        # Delete project entries in reverse order so reorder doesn't shift rows
+        for row in sorted(self.projects.keys(), reverse=True):
+            subprocess.run(
+                [HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True
+            )
+
         self._confirm_row = None
         self._confirm_overlay = None
         self._reload_grid()
 
-    def _delete_project_row(self, row):
+    def _delete_project_row(self, row, reload=True):
         """Close all windows in a project row, delete it, and reload."""
+        if row == DESKTOP_ROW:
+            return
         for col in range(1, 11):
             ws = row_col_to_ws(row, col)
             for client in self.ws_clients.get(ws, []):
@@ -1109,7 +1261,8 @@ class OverviewApp(Gtk.Application):
                         capture_output=True,
                     )
         subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
-        self._reload_grid()
+        if reload:
+            self._reload_grid()
 
     def _on_new_project(self, _btn=None):
         self._hide()

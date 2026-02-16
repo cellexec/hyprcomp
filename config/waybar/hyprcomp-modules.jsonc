@@ -10,7 +10,7 @@
   "custom/project": {
     "exec": "~/.config/waybar/scripts/project.sh",
     "return-type": "json",
-    "format": "{}",
+    "format": "󰣇  {}",
     "interval": 1,
     "signal": 10
   },

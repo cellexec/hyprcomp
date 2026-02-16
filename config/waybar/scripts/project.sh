@@ -20,12 +20,24 @@ get_project_name() {
     fi
 }
 
+DESKTOP_ROW=9
+
 ws=$(get_active_workspace)
 row=$(workspace_to_row "$ws")
 name=$(get_project_name "$row")
 
-if [[ -n "$name" ]]; then
-    echo "{\"text\": \"$name\", \"tooltip\": \"Project: $name (row $row)\", \"class\": \"active\"}"
+if [[ $row -eq $DESKTOP_ROW ]]; then
+    echo "{\"text\": \"Desktop\", \"tooltip\": \"Desktop (row $row)\", \"class\": \"active\"}"
+elif [[ -n "$name" ]]; then
+    display="${name##*/}"
+    # Calculate project index (1-based) and total
+    total=$(wc -l < "$PROJECTS_FILE" 2>/dev/null || echo 0)
+    idx=1
+    while IFS=: read -r r _; do
+        [[ $r -eq $row ]] && break
+        idx=$((idx + 1))
+    done < "$PROJECTS_FILE"
+    echo "{\"text\": \"$idx/$total | $display\", \"tooltip\": \"Project: $name (row $row)\", \"class\": \"active\"}"
 else
     echo "{\"text\": \"\", \"tooltip\": \"\", \"class\": \"empty\"}"
 fi
