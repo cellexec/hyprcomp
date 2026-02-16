@@ -1,8 +1,16 @@
 # HyprComp
 
-2D project-based workspace grid for Hyprland.
+2D project-based workspace grid for Hyprland. Each project gets its own row of workspaces, so you can swipe between projects vertically and between windows horizontally.
 
-Organizes workspaces into a grid where rows are projects and columns are windows within a project. Navigate horizontally between windows and vertically between projects with gestures, keybindings, and a waybar integration that shows only the current project's workspaces.
+> [!WARNING]
+> This was built on a live [Omarchy](https://omarchy.com) instance and has never been tested as a fresh install on a clean Arch/Hyprland setup. The installation guide below is a best-effort reference, not a guaranteed step-by-step. Paths, dependencies, and config formats may vary depending on your setup. PRs to improve portability are welcome.
+
+<!-- TODO: Add hero screenshot/gif of the overview here -->
+<!-- ![HyprComp Overview](assets/overview.png) -->
+
+## How it works
+
+Workspaces are organized into a 2D grid. Rows are projects, columns are windows within a project. A dedicated Desktop row at the top holds standalone apps that persist across project changes.
 
 ```
                  Column 1      Column 2      Column 3
@@ -12,64 +20,120 @@ Project B:       ws 11         ws 12         ws 13        (row 1)
 Project C:       ws 21         ws 22         ws 23        (row 2)
 ```
 
+The `hyprcomp` script translates navigation into absolute workspace numbers and dispatches via `hyprctl`, with directional animations (horizontal slide, vertical slide, fade for Desktop). The overview is a GTK4 + layer-shell daemon that queries Hyprland's IPC socket directly (~2.5ms) and captures workspace screenshots via grim.
+
 ## Features
 
-- **Desktop row** - dedicated row (row 9, workspaces 91-100) for standalone apps that persists across "close all"; always shown at the top of the overview
-- **3-finger horizontal swipe** - switch between windows in current project (row-bounded)
-- **3-finger vertical swipe** - switch between projects (preserves column position)
-- **SUPER+1-0** - project-relative workspace switching (column N of current row)
-- **SUPER+CTRL+UP/DOWN** - switch projects via keyboard
-- **SUPER+SHIFT+1-0** - move window to column N of current row
-- **Directional animations** - horizontal slide for column switches, vertical slide for project switches, fade for Desktop transitions
-- **Waybar integration** - project index and name (e.g. `1/4 | myproject`) + row-aware workspace buttons with click support
-- **Workspace overview** - fullscreen overlay showing Desktop and all projects in a 2D grid (SUPER+Tab), with cached workspace screenshots, active badge, keyboard shortcuts, and live gesture tracking
-- **Project launcher** - create new projects from ~/projects folders via walker menu (SUPER+N); launches configured apps per `.hyprcomp.toml`
-- **Auto-reorder** - deleting a project compacts row IDs and moves windows so new projects always append at the end
-- **Persistent state** - project names survive reboots
+### Workspace overview
 
-## Dependencies
+Fullscreen overlay showing all projects in a 2D grid with live workspace thumbnails, active badge, and keyboard navigation.
 
-- Hyprland
-- jq
-- alacritty (for terminal windows)
-- walker (for project launcher menu)
-- waybar (optional, for bar integration)
-- Python 3.11+ with PyGObject, gtk4-layer-shell (optional, for workspace overview)
-- grim (optional, for workspace screenshots in overview)
+<!-- TODO: Add gif/video of overview toggle -->
+<!-- ![Overview](assets/overview.gif) -->
+
+### Gesture navigation
+
+3-finger swipe horizontally between windows, vertically between projects. Swiping down past the last project opens the project launcher.
+
+<!-- TODO: Add gif of gesture navigation -->
+<!-- ![Gestures](assets/gestures.gif) -->
+
+### Desktop row
+
+Dedicated row for standalone apps (browser, Discord, etc.) that persists when closing all projects. Always shown at the top of the overview.
+
+<!-- TODO: Add screenshot showing Desktop row in overview -->
+<!-- ![Desktop Row](assets/desktop-row.png) -->
+
+### Project launcher
+
+Pick a folder from `~/projects/` via walker menu (SUPER+N). Supports nested subprojects for monorepos. Automatically launches configured apps per `.hyprcomp.toml`.
+
+<!-- TODO: Add gif of project launcher -->
+<!-- ![Project Launcher](assets/launcher.gif) -->
+
+### Quick close (SUPER+X)
+
+Close the current project with a confirm dialog without opening the overview. Instant response via the running daemon.
+
+<!-- TODO: Add gif of quick close -->
+<!-- ![Quick Close](assets/quick-close.gif) -->
+
+### Waybar integration
+
+Project name with index (`1/4 | myproject`) and row-aware workspace buttons that only show the current project's workspaces.
+
+<!-- TODO: Add screenshot of waybar -->
+<!-- ![Waybar](assets/waybar.png) -->
+
+### Per-project app config
+
+Each project can define which apps to launch in `.hyprcomp.toml`, with isolated Chromium profiles and environment-based URLs.
+
+<!-- TODO: Add screenshot of terminal with .hyprcomp.toml -->
+<!-- ![Config](assets/config.png) -->
+
+## Keybindings
+
+### Navigation
+
+| Action | Gesture | Keybinding |
+|--------|---------|------------|
+| Next window | 3-finger swipe left | `SUPER+1-0` |
+| Previous window | 3-finger swipe right | `SUPER+1-0` |
+| Next project | 3-finger swipe up | `SUPER+CTRL+DOWN` |
+| Previous project | 3-finger swipe down | `SUPER+CTRL+UP` |
+| Move window to column | | `SUPER+SHIFT+1-0` |
+| Workspace overview | | `SUPER+Tab` |
+| Close current project | | `SUPER+X` |
+| New project | | `SUPER+N` |
+| Restart overview | | `SUPER+R` |
+
+### Overview shortcuts
+
+| Key | Action |
+|-----|--------|
+| `hjkl` / arrows | Navigate between workspaces |
+| `Enter` | Switch to selected workspace |
+| `0` / backtick | Jump to Desktop row |
+| `1-9` | Jump to Nth project |
+| `d` | Close all windows in hovered workspace |
+| `a` | Open new workspace in hovered project |
+| `n` | Open project launcher |
+| `x` / `Delete` | Close hovered project (Desktop cannot be deleted) |
+| `q` / `Escape` | Close overlay |
 
 ## Installation
 
-### 1. Clone the repo
+### Dependencies
+
+- [Hyprland](https://hyprland.org)
+- jq
+- [alacritty](https://alacritty.org) (terminal)
+- [walker](https://github.com/abenz1267/walker) (project launcher menu)
+- [waybar](https://github.com/Alexays/Waybar) (optional, bar integration)
+- Python 3.11+ with PyGObject, gtk4-layer-shell (optional, overview)
+- [grim](https://sr.ht/~emersion/grim/) (optional, workspace screenshots)
+
+### Setup
 
 ```bash
-git clone https://github.com/your-user/hyprcomp ~/projects/hyprcomp
+git clone https://github.com/cellexec/hyprcomp ~/projects/hyprcomp
 chmod +x ~/projects/hyprcomp/hyprcomp
 ```
 
-### 2. Hyprland keybindings
-
-Copy the keybinding config and source it from your `hyprland.conf`:
+**Hyprland config** -- source the keybinding config (this unbinds default SUPER+1-9 and replaces with project-relative navigation):
 
 ```bash
 cp ~/projects/hyprcomp/config/hypr/hyprcomp.conf ~/.config/hypr/hyprcomp.conf
 ```
 
-Add this line at the **end** of `~/.config/hypr/hyprland.conf` (the config unbinds default SUPER+1-9 workspace switching and replaces it with project-relative navigation):
-
 ```conf
+# Add to end of ~/.config/hypr/hyprland.conf
 source = ~/.config/hypr/hyprcomp.conf
 ```
 
-### 3. Gesture bindings
-
-In your `~/.config/hypr/input.conf`, **remove** the default horizontal workspace gesture:
-
-```conf
-# Remove this line:
-gesture = 3, horizontal, workspace
-```
-
-**Replace** it with the hyprcomp gestures (or source the provided config):
+**Gesture bindings** -- replace the default horizontal workspace gesture:
 
 ```conf
 # 3-finger horizontal: switch columns within project row
@@ -81,68 +145,43 @@ gesture = 3, u, dispatcher, exec, ~/projects/hyprcomp/hyprcomp down
 gesture = 3, d, dispatcher, exec, ~/projects/hyprcomp/hyprcomp up
 ```
 
-### 4. Waybar integration (optional)
-
-Copy the scripts:
+**Waybar** (optional):
 
 ```bash
 cp ~/projects/hyprcomp/config/waybar/scripts/project.sh ~/.config/waybar/scripts/
 cp ~/projects/hyprcomp/config/waybar/scripts/ws-button.sh ~/.config/waybar/scripts/
 ```
 
-In your waybar `config.jsonc`, replace `"hyprland/workspaces"` in `modules-left` with:
+Replace `"hyprland/workspaces"` in your waybar config with the modules from `config/waybar/hyprcomp-modules.jsonc` and add styles from `config/waybar/hyprcomp.css`.
 
-```json
-"modules-left": ["custom/project", "custom/ws-1", "custom/ws-2", "custom/ws-3", "custom/ws-4", "custom/ws-5", "custom/ws-6", "custom/ws-7", "custom/ws-8", "custom/ws-9"],
-```
-
-Then merge the module definitions from `config/waybar/hyprcomp-modules.jsonc` into your config.
-
-Add the styles from `config/waybar/hyprcomp.css` to your waybar `style.css`. The CSS uses Catppuccin Mocha color variables -- adjust to match your theme.
-
-### 5. Autostart the overview daemon (optional)
-
-The workspace overview runs as a persistent daemon for instant SUPER+Tab. Add to your Hyprland autostart:
+**Overview daemon** (optional) -- for instant SUPER+Tab:
 
 ```conf
+# Add to Hyprland autostart
 exec-once = ~/projects/hyprcomp/hyprcomp-overview &
 ```
 
-Without autostart, the first SUPER+Tab has a ~1s cold start (Python imports), then subsequent toggles are instant.
-
-### 6. Reload
+**Reload:**
 
 ```bash
 hyprctl reload
 killall waybar; waybar &disown
 ```
 
-## Usage
+## Configuration
 
-### Create projects
+### Per-project apps
 
-Press SUPER+N or click "open project" in the overview toolbar to pick a folder from `~/projects/` via walker. Selecting a folder creates the project and launches windows based on its config (see below). Folders with subprojects show a `›` suffix and expand into a sub-picker.
-
-Or from the command line:
-
-```bash
-hyprcomp create homelab        # Row 0, workspaces 1-10
-hyprcomp create guitar-studio  # Row 1, workspaces 11-20
-hyprcomp create homelab/flux   # Subproject — resolves to ~/projects/homelab/flux
-```
-
-### Per-project configuration
-
-Place a `.hyprcomp.toml` in any project root to control which windows launch:
+Place a `.hyprcomp.toml` in any project root:
 
 ```toml
 [[windows]]
 exec = "claude"
-terminal = true     # Wrap in alacritty terminal
+terminal = true     # Wrap in alacritty
 
 [[windows]]
 exec = "chromium"
-browser = true      # Add --user-data-dir for isolation
+browser = true      # Isolated --user-data-dir per project
 
 [[windows]]
 exec = "nvim"
@@ -151,14 +190,14 @@ terminal = true
 ```
 
 Window types:
-- `terminal = true` — runs in alacritty with zsh
-- `browser = true` — adds `--user-data-dir` for per-project isolation
-- `url_env = "VAR"` — reads `VAR` from the project's `.env` file and opens it in the browser
-- Neither — launched as a plain GUI app via hyprctl
+- `terminal = true` -- launched in alacritty with zsh
+- `browser = true` -- gets `--user-data-dir` for per-project isolation
+- `url_env = "VAR"` -- reads URL from the project's `.env` file
+- Neither -- launched as a plain GUI app
 
-### Subprojects (monorepo support)
+### Subprojects
 
-Directories with `[[subprojects]]` in their `.hyprcomp.toml` expand into separate projects in the picker:
+For monorepos, define subprojects that appear as separate entries in the launcher:
 
 ```toml
 [[subprojects]]
@@ -166,85 +205,51 @@ path = "flux"
 
 [[subprojects]]
 path = "monorepo/apps/web"
-name = "monorepo-web"       # Optional display name
+name = "monorepo-web"
 ```
 
-Subprojects can nest — if a subproject directory itself contains a `.hyprcomp.toml` with `[[subprojects]]`, it expands further (e.g., `homelab ›` → `monorepo ›` → individual apps).
+Subprojects nest recursively.
 
-Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve to the full filesystem path.
+### Config resolution order
 
-### Config resolution
-
-1. `<project_dir>/.hyprcomp.toml` `[[windows]]`
-2. `~/.config/hyprcomp/defaults.toml` `[[windows]]` (global defaults)
+1. `<project_dir>/.hyprcomp.toml`
+2. `~/.config/hyprcomp/defaults.toml`
 3. Built-in defaults (claude, chromium, nvim)
 
-### Navigate
+## CLI reference
 
-| Action | Gesture | Keybinding |
-|--------|---------|------------|
-| Next window (right) | 3-finger swipe left | SUPER+2, SUPER+3, ... |
-| Previous window (left) | 3-finger swipe right | SUPER+1 |
-| Next project (down) | 3-finger swipe up | SUPER+CTRL+DOWN |
-| Previous project (up) | 3-finger swipe down | SUPER+CTRL+UP |
-| Move window to column N | | SUPER+SHIFT+1-0 |
-| Jump to column N | | SUPER+1-0 |
-| Workspace overview | | SUPER+Tab |
-| Close current project | | SUPER+X |
-| New project (walker menu) | | SUPER+N |
-| Open project (past last) | 3-finger swipe up past last | |
-| Restart overview daemon | | SUPER+R |
-
-### Overview keyboard shortcuts
-
-| Key | Action |
-|-----|--------|
-| Arrow keys / h,j,k,l | Navigate between workspaces |
-| Enter | Switch to selected workspace |
-| 0 / backtick | Jump to Desktop row |
-| 1-9 | Jump to Nth project |
-| d | Close all windows in selected workspace |
-| a | Open new workspace at end of selected project |
-| n | Open new project |
-| x / Delete | Close selected project (with confirmation; Desktop cannot be deleted) |
-| y / Enter | Confirm action |
-| Escape / q | Cancel or close overlay |
-
-### Manage projects
-
-```bash
-hyprcomp list              # Show all projects (* marks current)
-hyprcomp status            # Current workspace, row, and column
-hyprcomp rename new-name   # Rename current project
-hyprcomp delete            # Remove current project registration
-hyprcomp overview          # Toggle workspace overview overlay
-hyprcomp restart           # Restart the overview daemon
+```
+hyprcomp up|down|left|right   Navigate the grid
+hyprcomp go <col>             Jump to column 1-10
+hyprcomp move <col>           Move window to column 1-10
+hyprcomp create <name>        Register a new project
+hyprcomp delete               Delete current project
+hyprcomp close                Close current project (with confirm)
+hyprcomp rename <name>        Rename current project
+hyprcomp list                 List all projects
+hyprcomp status               Show current position
+hyprcomp overview             Toggle workspace overview
+hyprcomp restart              Restart overview daemon
 ```
 
-## How it works
+## State files
 
-Each project gets a row of 10 workspace slots. Row 0 uses workspaces 1-10, row 1 uses 11-20, and so on (up to 9 project rows). Row 9 (workspaces 91-100) is reserved as the Desktop row for standalone apps like browsers or Discord that should persist when projects are closed.
-
-The `hyprcomp` script translates all navigation into absolute workspace numbers and dispatches via `hyprctl`. Before each dispatch, it sets the animation direction dynamically -- `slide` for horizontal movement, `slidevert` for vertical -- so transitions feel natural. A screenshot of the current workspace is cached on each switch for the overview thumbnails.
-
-The overview overlay (`hyprcomp-overview`) is a GTK4 + layer-shell Python app that runs as a persistent daemon. It queries Hyprland's IPC socket directly (~2.5ms for all data) and listens on socket2 for live workspace change events. Screenshots are captured asynchronously via grim.
-
-State is stored in `~/.config/hyprcomp/`:
-- `state` - current row number
-- `projects` - row-to-name mapping (e.g., `0:homelab`)
-- `defaults.toml` - global default windows config (optional)
-- `chromium/<name>/` - isolated Chromium profiles per project
-
-Per-project config lives in `<project_dir>/.hyprcomp.toml`.
-
-Workspace thumbnails are cached in `~/.cache/hyprcomp/thumbs/`.
-
-The waybar modules replace the built-in `hyprland/workspaces` widget with custom scripts that only show workspaces belonging to the current project row, labeled with column numbers (1-9) instead of absolute workspace IDs.
+| Path | Purpose |
+|------|---------|
+| `~/.config/hyprcomp/state` | Current row number |
+| `~/.config/hyprcomp/projects` | Row-to-name mapping |
+| `~/.config/hyprcomp/defaults.toml` | Global default windows config |
+| `~/.config/hyprcomp/chromium/<name>/` | Isolated Chromium profiles |
+| `~/.cache/hyprcomp/thumbs/` | Workspace screenshot cache |
 
 ## Uninstalling
 
 1. Remove `source = ~/.config/hypr/hyprcomp.conf` from `hyprland.conf`
-2. Restore `gesture = 3, horizontal, workspace` in `input.conf`
-3. Restore `"hyprland/workspaces"` in your waybar config
+2. Restore default workspace gestures in your input config
+3. Restore `"hyprland/workspaces"` in waybar config
 4. `hyprctl reload && killall waybar && waybar &disown`
 5. Remove `~/.config/hyprcomp/` and `~/.config/hypr/hyprcomp.conf`
+
+## License
+
+MIT
