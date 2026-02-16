@@ -204,6 +204,8 @@ terminal = true
 
 Set a theme for the overview in `~/.config/hyprcomp/config.toml`. You can also switch themes live from the overview toolbar (colored dots) or by pressing `t` to cycle through them.
 
+![Theme Switcher](showcase/theme-switcher.png)
+
 ```toml
 theme = "mocha"  # mocha, nord, dracula, gruvbox, tokyo-night, rose-pine, solarized, everforest, kanagawa, one-dark
 ```
