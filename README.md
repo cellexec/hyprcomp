@@ -35,7 +35,7 @@ Fullscreen overlay with live thumbnails, active badges, and keyboard navigation.
 
 3-finger swipe left/right between windows, up/down between projects. Swiping past the last project opens the launcher.
 
-<video src="showcase/gestures.mp4" controls muted loop></video>
+![Gestures](showcase/gestures.gif)
 
 ### Desktop row
 
@@ -47,7 +47,7 @@ Persistent row for standalone apps (browser, Discord, etc.) -- always visible at
 
 Walker-based menu (SUPER+N) that scans `~/projects/`, filters already-open projects and excluded directories, and supports recursive subproject navigation. Launches apps per `.hyprcomp.toml`.
 
-<video src="showcase/launcher.mp4" controls muted loop></video>
+![Project Launcher](showcase/launcher.gif)
 
 ### Quick close
 
