@@ -3,14 +3,17 @@
 2D project-based workspace grid for Hyprland. Each project gets its own row of workspaces, so you can swipe between projects vertically and between windows horizontally.
 
 > [!WARNING]
-> This was built on a live [Omarchy](https://omarchy.com) instance and has never been tested as a fresh install on a clean Arch/Hyprland setup. The installation guide below is a best-effort reference, not a guaranteed step-by-step. Paths, dependencies, and config formats may vary depending on your setup. PRs to improve portability are welcome.
+> This was built on a live [Omarchy](https://omarchy.com) instance and has never been tested as a fresh install on a clean Arch/Hyprland setup. The installation guide below is a best-effort reference, not a guaranteed step-by-step. Paths, dependencies, and config formats may vary depending on your setup. Contributions for a cleaner installer, improved install guide, or new features are very welcome.
 
-<!-- TODO: Add hero screenshot/gif of the overview here -->
-<!-- ![HyprComp Overview](assets/overview.png) -->
+> [!NOTE]
+> This project was inspired by [Theo's (t3.gg) post about "The Agentic Code Problem"](https://x.com/theo/status/2018091358251372601) ([video](https://www.youtube.com/watch?v=YVq28OTPCKw)) -- when working on multiple projects with AI coding agents, projects end up split across terminal tabs, browser windows, and IDEs with no natural grouping. You spend more time switching between apps than building. HyprComp solves this by giving each project its own isolated row of workspaces so everything stays grouped together.
+
+<!-- TODO: Replace with actual hero screenshot/video -->
+![HyprComp Overview](showcase/overview.jpg)
 
 ## How it works
 
-Workspaces are organized into a 2D grid. Rows are projects, columns are windows within a project. A dedicated Desktop row at the top holds standalone apps that persist across project changes.
+A **project** is a collection of windows -- each window is a full Hyprland workspace (which can still have split panes, floating windows, etc. like normal). Projects are organized into a 2D grid where rows are projects and columns are windows within a project. A dedicated Desktop row at the top holds standalone apps that persist across project changes.
 
 ```
                  Column 1      Column 2      Column 3
@@ -28,50 +31,50 @@ The `hyprcomp` script translates navigation into absolute workspace numbers and 
 
 Fullscreen overlay showing all projects in a 2D grid with live workspace thumbnails, active badge, and keyboard navigation.
 
-<!-- TODO: Add gif/video of overview toggle -->
-<!-- ![Overview](assets/overview.gif) -->
+<!-- TODO: Replace with actual video/screenshot -->
+![Overview](showcase/overview.mp4)
 
 ### Gesture navigation
 
 3-finger swipe horizontally between windows, vertically between projects. Swiping down past the last project opens the project launcher.
 
-<!-- TODO: Add gif of gesture navigation -->
-<!-- ![Gestures](assets/gestures.gif) -->
+<!-- TODO: Replace with actual video/screenshot -->
+![Gestures](showcase/gestures.mp4)
 
 ### Desktop row
 
 Dedicated row for standalone apps (browser, Discord, etc.) that persists when closing all projects. Always shown at the top of the overview.
 
-<!-- TODO: Add screenshot showing Desktop row in overview -->
-<!-- ![Desktop Row](assets/desktop-row.png) -->
+<!-- TODO: Replace with actual video/screenshot -->
+![Desktop Row](showcase/desktop-row.jpg)
 
 ### Project launcher
 
 Pick a folder from `~/projects/` via walker menu (SUPER+N). Supports nested subprojects for monorepos. Automatically launches configured apps per `.hyprcomp.toml`.
 
-<!-- TODO: Add gif of project launcher -->
-<!-- ![Project Launcher](assets/launcher.gif) -->
+<!-- TODO: Replace with actual video/screenshot -->
+![Project Launcher](showcase/launcher.mp4)
 
 ### Quick close (SUPER+X)
 
 Close the current project with a confirm dialog without opening the overview. Instant response via the running daemon.
 
-<!-- TODO: Add gif of quick close -->
-<!-- ![Quick Close](assets/quick-close.gif) -->
+<!-- TODO: Replace with actual video/screenshot -->
+![Quick Close](showcase/quick-close.mp4)
 
 ### Waybar integration
 
 Project name with index (`1/4 | myproject`) and row-aware workspace buttons that only show the current project's workspaces.
 
-<!-- TODO: Add screenshot of waybar -->
-<!-- ![Waybar](assets/waybar.png) -->
+<!-- TODO: Replace with actual screenshot -->
+![Waybar](showcase/waybar.jpg)
 
 ### Per-project app config
 
 Each project can define which apps to launch in `.hyprcomp.toml`, with isolated Chromium profiles and environment-based URLs.
 
-<!-- TODO: Add screenshot of terminal with .hyprcomp.toml -->
-<!-- ![Config](assets/config.png) -->
+<!-- TODO: Replace with actual screenshot -->
+![Config](showcase/config.jpg)
 
 ## Keybindings
 
@@ -97,8 +100,8 @@ Each project can define which apps to launch in `.hyprcomp.toml`, with isolated 
 | `Enter` | Switch to selected workspace |
 | `0` / backtick | Jump to Desktop row |
 | `1-9` | Jump to Nth project |
-| `d` | Close all windows in hovered workspace |
-| `a` | Open new workspace in hovered project |
+| `d` | Close hovered window |
+| `a` | Open new window in hovered project |
 | `n` | Open project launcher |
 | `x` / `Delete` | Close hovered project (Desktop cannot be deleted) |
 | `q` / `Escape` | Close overlay |
