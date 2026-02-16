@@ -190,7 +190,9 @@ Subproject names are stored as `parent/path` (e.g., `homelab/flux`) and resolve 
 | Move window to column N | | SUPER+SHIFT+1-0 |
 | Jump to column N | | SUPER+1-0 |
 | Workspace overview | | SUPER+Tab |
+| Close current project | | SUPER+X |
 | New project (walker menu) | | SUPER+N |
+| Open project (past last) | 3-finger swipe up past last | |
 | Restart overview daemon | | SUPER+R |
 
 ### Overview keyboard shortcuts

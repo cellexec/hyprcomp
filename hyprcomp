@@ -180,8 +180,9 @@ cmd_down() {
     max_row=$(get_max_row)
 
     if [[ $max_row -lt 0 ]]; then
-        echo "No projects registered"
-        return 1
+        # No projects — open project launcher
+        "$(dirname "$0")/hyprcomp-menu" &disown
+        return 0
     fi
 
     if [[ $row -eq $DESKTOP_ROW ]]; then
@@ -194,8 +195,8 @@ cmd_down() {
             target_row=$((target_row + 1))
         done
         if [[ $target_row -gt $max_row ]]; then
-            echo "No project rows below"
-            return 1
+            "$(dirname "$0")/hyprcomp-menu" &disown
+            return 0
         fi
     else
         # Find the nearest existing row below
@@ -208,8 +209,9 @@ cmd_down() {
         done
 
         if [[ $target_row -gt $max_row ]]; then
-            echo "Already at the bottom row"
-            return 1
+            # Past last project — open project launcher
+            "$(dirname "$0")/hyprcomp-menu" &disown
+            return 0
         fi
     fi
 
@@ -481,6 +483,25 @@ cmd_overview() {
     "$(dirname "$0")/hyprcomp-overview" &disown
 }
 
+cmd_close() {
+    sync_state
+    local row
+    row=$(get_current_row)
+    if [[ $row -eq $DESKTOP_ROW ]]; then
+        echo "Cannot close Desktop row"
+        return 1
+    fi
+    if ! row_exists "$row"; then
+        echo "Current row $row is not a registered project"
+        return 1
+    fi
+    # Signal running overview daemon (instant) or fall back to standalone
+    if pkill -USR2 -f 'hyprcomp-overview' 2>/dev/null; then
+        exit 0
+    fi
+    "$(dirname "$0")/hyprcomp-overview" confirm-close &disown
+}
+
 cmd_restart() {
     pkill -f 'hyprcomp-overview' 2>/dev/null || true
     sleep 0.2
@@ -507,6 +528,7 @@ case "$cmd" in
     delete)     cmd_delete ;;
     delete-row) cmd_delete_row "$@" ;;
     reorder)    cmd_reorder ;;
+    close)      cmd_close ;;
     overview)   cmd_overview ;;
     restart)    cmd_restart ;;
     help)

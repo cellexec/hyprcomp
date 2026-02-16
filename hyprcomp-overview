@@ -533,6 +533,8 @@ class OverviewApp(Gtk.Application):
 
         # Register SIGUSR1 for toggle from hyprcomp script
         GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR1, self._on_toggle)
+        # Register SIGUSR2 for confirm-close dialog
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGUSR2, self._on_confirm_close_signal)
 
         # Show and load data
         self._show()
@@ -543,6 +545,77 @@ class OverviewApp(Gtk.Application):
         else:
             self._show()
         return True  # keep handler registered
+
+    def _on_confirm_close_signal(self):
+        """Show confirm-close dialog via SIGUSR2 (instant, reuses running daemon)."""
+        active_ws = hyprctl_json("activeworkspace")
+        row = ws_to_row(active_ws["id"])
+
+        if row == DESKTOP_ROW:
+            return True
+
+        projects = load_projects()
+        name = projects.get(row)
+        if not name:
+            return True
+
+        # Load state needed for closing
+        self.projects = projects
+        self.active_ws_id = active_ws["id"]
+        self.active_row = row
+        self.ws_clients = {}
+        for c in hyprctl_json("clients"):
+            ws_id = c["workspace"]["id"]
+            if ws_id > 0:
+                self.ws_clients.setdefault(ws_id, []).append(c)
+
+        display = name.rsplit("/", 1)[-1]
+        self._confirm_row = row
+        self._visible = True
+        self.win.set_visible(True)
+        self.win.present()
+
+        overlay = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+            spacing=12,
+        )
+        overlay.add_css_class("confirm-box")
+
+        lbl = Gtk.Label(label=f"Close project '{display}'?")
+        lbl.add_css_class("confirm-label")
+        overlay.append(lbl)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                          halign=Gtk.Align.CENTER)
+        yes = Gtk.Button(label="Yes")
+        yes.add_css_class("confirm-yes")
+        yes.set_focusable(False)
+        yes.connect("clicked", lambda _b: self._confirm_close_project())
+        btn_box.append(yes)
+
+        no = Gtk.Button(label="No")
+        no.add_css_class("confirm-no")
+        no.set_focusable(False)
+        no.connect("clicked", lambda _b: self._dismiss_close_project())
+        btn_box.append(no)
+
+        overlay.append(btn_box)
+        self.win.set_child(overlay)
+        return True
+
+    def _confirm_close_project(self):
+        """Close the current project and hide."""
+        row = self._confirm_row
+        self._confirm_row = None
+        self._delete_project_row(row, reload=False)
+        self._hide()
+
+    def _dismiss_close_project(self):
+        """Cancel close and hide."""
+        self._confirm_row = None
+        self._hide()
 
     def _show(self):
         self._visible = True
@@ -1416,12 +1489,110 @@ def launch_project(name):
     )
 
 
+class ConfirmCloseApp(Gtk.Application):
+    """Minimal layer-shell dialog to confirm closing the current project."""
+
+    def __init__(self):
+        super().__init__(application_id="com.hyprcomp.confirm-close",
+                         flags=Gio.ApplicationFlags.NON_UNIQUE)
+
+    def do_activate(self):
+        # Resolve current project
+        active_ws = hyprctl_json("activeworkspace")
+        row = ws_to_row(active_ws["id"])
+
+        if row == DESKTOP_ROW:
+            sys.exit(0)
+
+        projects = load_projects()
+        name = projects.get(row)
+        if not name:
+            sys.exit(0)
+
+        display = name.rsplit("/", 1)[-1]
+
+        win = Gtk.ApplicationWindow(application=self)
+        Gtk4LayerShell.init_for_window(win)
+        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+        for edge in (
+            Gtk4LayerShell.Edge.TOP, Gtk4LayerShell.Edge.BOTTOM,
+            Gtk4LayerShell.Edge.LEFT, Gtk4LayerShell.Edge.RIGHT,
+        ):
+            Gtk4LayerShell.set_anchor(win, edge, True)
+        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+        Gtk4LayerShell.set_namespace(win, "hyprcomp-confirm")
+
+        css = Gtk.CssProvider()
+        css.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+            spacing=12,
+        )
+        box.add_css_class("confirm-box")
+
+        lbl = Gtk.Label(label=f"Close project '{display}'?")
+        lbl.add_css_class("confirm-label")
+        box.append(lbl)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                          halign=Gtk.Align.CENTER)
+
+        yes = Gtk.Button(label="Yes")
+        yes.add_css_class("confirm-yes")
+        yes.connect("clicked", lambda _b: self._do_close(win, row))
+        btn_box.append(yes)
+
+        no = Gtk.Button(label="No")
+        no.add_css_class("confirm-no")
+        no.connect("clicked", lambda _b: win.close())
+        btn_box.append(no)
+
+        box.append(btn_box)
+        win.set_child(box)
+
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.connect("key-pressed", lambda _c, kv, _kc, _s: (
+            self._do_close(win, row) if kv in (Gdk.KEY_Return, Gdk.KEY_y)
+            else win.close() if kv in (Gdk.KEY_Escape, Gdk.KEY_q, Gdk.KEY_n)
+            else None
+        ))
+        win.add_controller(key_ctrl)
+        win.present()
+
+    def _do_close(self, win, row):
+        clients = hyprctl_json("clients")
+        for col in range(1, 11):
+            ws = row_col_to_ws(row, col)
+            for c in clients:
+                if c["workspace"]["id"] == ws:
+                    addr = c.get("address", "")
+                    if addr:
+                        hyprctl_dispatch(f"closewindow address:{addr}")
+        subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
+        subprocess.Popen(
+            ["pkill", "-SIGRTMIN+10", "waybar"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        win.close()
+
+
 def main():
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
     if len(sys.argv) >= 3 and sys.argv[1] == "launch":
         launch_project(sys.argv[2])
+        return
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "confirm-close":
+        app = ConfirmCloseApp()
+        app.run([])
         return
 
     app = OverviewApp()
