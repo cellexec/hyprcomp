@@ -29,6 +29,23 @@ for item in cfg.get('exclude', []):
 " "$CONFIG_TOML" 2>/dev/null
 }
 
+get_config_val() {
+    local key=$1
+    [[ -f "$CONFIG_TOML" ]] || return
+    python3 -c "
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+import sys
+with open(sys.argv[1], 'rb') as f:
+    cfg = tomllib.load(f)
+val = cfg.get(sys.argv[2])
+if val is not None:
+    print(val)
+" "$CONFIG_TOML" "$key" 2>/dev/null
+}
+
 is_excluded() {
     local name="$1"
     echo "$EXCLUDES" | grep -qxF "$name"
@@ -145,9 +162,75 @@ run_menu() {
     fi
 }
 
+collect_from_subproject() {
+    local parent_dir="$1" sp="$2" prefix="$3"
+    local sp_dir="$parent_dir/$sp"
+    [[ -d "$sp_dir" ]] || return
+    local display
+    display=$(basename "$sp")
+    is_excluded "$display" && return
+    local full_name="${prefix}${sp}"
+
+    if has_subprojects "$sp_dir"; then
+        collect_leaves "$sp_dir" "$full_name/"
+    else
+        echo "$existing" | grep -qxF "$full_name" || echo "$full_name"
+    fi
+}
+
+collect_leaves() {
+    local parent_dir="$1" prefix="$2"
+
+    if [[ "$parent_dir" == "$PROJECTS_DIR" ]]; then
+        for dir in "$parent_dir"/*/; do
+            [[ -d "$dir" ]] || continue
+            local name
+            name=$(basename "$dir")
+            [[ "$name" == .* ]] && continue
+            is_excluded "$name" && continue
+
+            if has_subprojects "$dir"; then
+                while IFS= read -r sp; do
+                    collect_from_subproject "$dir" "$sp" "${prefix}${name}/"
+                done < <(get_subprojects "$dir")
+            else
+                echo "$existing" | grep -qxF "${prefix}${name}" || echo "${prefix}${name}"
+            fi
+        done
+    else
+        while IFS= read -r sp; do
+            collect_from_subproject "$parent_dir" "$sp" "$prefix"
+        done < <(get_subprojects "$parent_dir")
+    fi
+}
+
+build_flat_menu() {
+    local existing
+    existing=$(get_existing)
+    EXCLUDES=$(get_excludes)
+
+    collect_leaves "$PROJECTS_DIR" ""
+}
+
+run_flat_menu() {
+    local items
+    items=$(build_flat_menu)
+    [[ -z "$items" ]] && return 1
+
+    local selection
+    selection=$(echo "$items" | walker -d -p "Open project…") || return 1
+    selection=$(echo "$selection" | tr -d '\n')
+    [[ -z "$selection" ]] && return 1
+    echo "$selection"
+}
+
 main() {
     local name
-    name=$(run_menu "$PROJECTS_DIR" "" "0") || exit 0
+    if [[ "$(get_config_val flatmap)" == "True" ]]; then
+        name=$(run_flat_menu) || exit 0
+    else
+        name=$(run_menu "$PROJECTS_DIR" "" "0") || exit 0
+    fi
     [[ -z "$name" ]] && exit 0
 
     "$OVERVIEW" launch "$name" &disown

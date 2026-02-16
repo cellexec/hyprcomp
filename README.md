@@ -45,7 +45,7 @@ Persistent row for standalone apps (browser, Discord, etc.) -- always visible at
 
 ### Project launcher
 
-Walker-based menu (SUPER+N) that scans `~/projects/`, filters already-open projects and excluded directories, and supports recursive subproject navigation. Launches apps per `.hyprcomp.toml`.
+Walker-based menu (SUPER+N) that scans `~/projects/`, filters already-open projects and excluded directories, and supports recursive subproject navigation. With `flatmap = true`, all subprojects are flattened into a single list for one-click selection. Launches apps per `.hyprcomp.toml`.
 
 ![Project Launcher](showcase/launcher.gif)
 
@@ -205,6 +205,14 @@ Set a Catppuccin flavor for the overview in `~/.config/hyprcomp/config.toml`:
 
 ```toml
 theme = "mocha"  # mocha (default), latte, frappe, macchiato
+```
+
+### Flat launcher mode
+
+Flatten all subprojects into a single list instead of hierarchical drill-down navigation:
+
+```toml
+flatmap = true
 ```
 
 ### Excluding directories
