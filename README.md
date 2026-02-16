@@ -92,6 +92,7 @@ Define which apps to launch per project in `.hyprcomp.toml` -- terminal apps, is
 | `a`             | Open new window in hovered project                |
 | `n`             | Open project launcher                             |
 | `x` / `Delete`  | Close hovered project (Desktop cannot be deleted) |
+| `t`             | Cycle theme (10 themes: mocha, nord, dracula, etc.) |
 | `q` / `Escape`  | Close overlay                                     |
 
 </details>
@@ -201,10 +202,10 @@ terminal = true
 
 ### Theme
 
-Set a Catppuccin flavor for the overview in `~/.config/hyprcomp/config.toml`:
+Set a theme for the overview in `~/.config/hyprcomp/config.toml`. You can also switch themes live from the overview toolbar (colored dots) or by pressing `t` to cycle through them.
 
 ```toml
-theme = "mocha"  # mocha (default), latte, frappe, macchiato
+theme = "mocha"  # mocha, nord, dracula, gruvbox, tokyo-night, rose-pine, solarized, everforest, kanagawa, one-dark
 ```
 
 ### Flat launcher mode

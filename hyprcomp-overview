@@ -87,62 +87,176 @@ THEMES = {
         "peach": (0.980, 0.702, 0.529),
         "lavender": (0.702, 0.718, 0.969),
     },
-    "latte": {
-        "base": (0.937, 0.929, 0.965),
-        "mantle": (0.906, 0.898, 0.941),
-        "crust": (0.863, 0.855, 0.910),
-        "surface0": (0.800, 0.792, 0.855),
-        "surface1": (0.737, 0.729, 0.804),
-        "surface2": (0.672, 0.663, 0.753),
-        "overlay0": (0.608, 0.600, 0.702),
-        "text": (0.298, 0.286, 0.369),
-        "subtext0": (0.427, 0.416, 0.510),
-        "subtext1": (0.361, 0.349, 0.439),
-        "blue": (0.114, 0.388, 0.784),
-        "teal": (0.145, 0.584, 0.506),
-        "green": (0.251, 0.565, 0.082),
-        "red": (0.816, 0.169, 0.310),
-        "mauve": (0.533, 0.235, 0.847),
-        "peach": (0.996, 0.439, 0.098),
-        "lavender": (0.451, 0.471, 0.839),
+    "nord": {
+        "base": (0.180, 0.204, 0.251),
+        "mantle": (0.153, 0.176, 0.220),
+        "crust": (0.133, 0.157, 0.192),
+        "surface0": (0.231, 0.259, 0.322),
+        "surface1": (0.263, 0.298, 0.369),
+        "surface2": (0.298, 0.337, 0.416),
+        "overlay0": (0.380, 0.431, 0.533),
+        "text": (0.925, 0.937, 0.957),
+        "subtext0": (0.847, 0.871, 0.914),
+        "subtext1": (0.898, 0.914, 0.941),
+        "blue": (0.506, 0.631, 0.757),
+        "teal": (0.561, 0.737, 0.733),
+        "green": (0.639, 0.745, 0.549),
+        "red": (0.749, 0.380, 0.416),
+        "mauve": (0.706, 0.557, 0.678),
+        "peach": (0.816, 0.529, 0.439),
+        "lavender": (0.533, 0.753, 0.816),
     },
-    "frappe": {
-        "base": (0.184, 0.192, 0.255),
-        "mantle": (0.161, 0.169, 0.224),
-        "crust": (0.141, 0.149, 0.200),
-        "surface0": (0.255, 0.263, 0.337),
-        "surface1": (0.318, 0.329, 0.412),
-        "surface2": (0.388, 0.400, 0.490),
-        "overlay0": (0.455, 0.471, 0.569),
-        "text": (0.773, 0.804, 0.918),
-        "subtext0": (0.647, 0.675, 0.776),
-        "subtext1": (0.710, 0.741, 0.847),
-        "blue": (0.549, 0.706, 0.980),
-        "teal": (0.506, 0.843, 0.788),
-        "green": (0.651, 0.859, 0.580),
-        "red": (0.906, 0.502, 0.612),
-        "mauve": (0.792, 0.620, 0.969),
-        "peach": (0.937, 0.671, 0.510),
-        "lavender": (0.702, 0.722, 0.973),
+    "dracula": {
+        "base": (0.157, 0.165, 0.212),
+        "mantle": (0.129, 0.133, 0.173),
+        "crust": (0.098, 0.102, 0.129),
+        "surface0": (0.204, 0.216, 0.275),
+        "surface1": (0.267, 0.278, 0.353),
+        "surface2": (0.325, 0.365, 0.498),
+        "overlay0": (0.384, 0.447, 0.643),
+        "text": (0.973, 0.973, 0.949),
+        "subtext0": (0.580, 0.600, 0.710),
+        "subtext1": (0.749, 0.765, 0.839),
+        "blue": (0.741, 0.576, 0.976),
+        "teal": (0.545, 0.914, 0.992),
+        "green": (0.314, 0.980, 0.482),
+        "red": (1.000, 0.333, 0.333),
+        "mauve": (1.000, 0.475, 0.776),
+        "peach": (1.000, 0.722, 0.424),
+        "lavender": (0.945, 0.980, 0.549),
     },
-    "macchiato": {
-        "base": (0.145, 0.153, 0.216),
-        "mantle": (0.122, 0.129, 0.184),
-        "crust": (0.094, 0.102, 0.149),
-        "surface0": (0.224, 0.231, 0.306),
-        "surface1": (0.298, 0.310, 0.396),
-        "surface2": (0.373, 0.388, 0.486),
-        "overlay0": (0.443, 0.463, 0.565),
-        "text": (0.792, 0.827, 0.945),
-        "subtext0": (0.659, 0.690, 0.800),
-        "subtext1": (0.725, 0.757, 0.875),
-        "blue": (0.541, 0.714, 0.984),
-        "teal": (0.541, 0.867, 0.812),
-        "green": (0.651, 0.875, 0.604),
-        "red": (0.929, 0.525, 0.635),
-        "mauve": (0.780, 0.635, 0.969),
-        "peach": (0.961, 0.686, 0.518),
-        "lavender": (0.702, 0.722, 0.973),
+    "gruvbox": {
+        "base": (0.157, 0.157, 0.157),
+        "mantle": (0.114, 0.125, 0.129),
+        "crust": (0.078, 0.086, 0.090),
+        "surface0": (0.235, 0.220, 0.212),
+        "surface1": (0.314, 0.286, 0.271),
+        "surface2": (0.400, 0.361, 0.329),
+        "overlay0": (0.486, 0.435, 0.392),
+        "text": (0.922, 0.859, 0.698),
+        "subtext0": (0.659, 0.600, 0.518),
+        "subtext1": (0.741, 0.682, 0.576),
+        "blue": (0.514, 0.647, 0.596),
+        "teal": (0.557, 0.753, 0.486),
+        "green": (0.722, 0.733, 0.149),
+        "red": (0.984, 0.286, 0.204),
+        "mauve": (0.827, 0.525, 0.608),
+        "peach": (0.996, 0.502, 0.098),
+        "lavender": (0.980, 0.741, 0.184),
+    },
+    "tokyo-night": {
+        "base": (0.102, 0.106, 0.149),
+        "mantle": (0.086, 0.086, 0.118),
+        "crust": (0.063, 0.063, 0.078),
+        "surface0": (0.161, 0.180, 0.259),
+        "surface1": (0.231, 0.259, 0.380),
+        "surface2": (0.255, 0.282, 0.408),
+        "overlay0": (0.337, 0.373, 0.537),
+        "text": (0.753, 0.792, 0.961),
+        "subtext0": (0.663, 0.694, 0.839),
+        "subtext1": (0.706, 0.741, 0.902),
+        "blue": (0.478, 0.635, 0.969),
+        "teal": (0.451, 0.855, 0.792),
+        "green": (0.620, 0.808, 0.416),
+        "red": (0.969, 0.463, 0.557),
+        "mauve": (0.733, 0.604, 0.969),
+        "peach": (1.000, 0.620, 0.392),
+        "lavender": (0.490, 0.812, 1.000),
+    },
+    "rose-pine": {
+        "base": (0.098, 0.090, 0.141),
+        "mantle": (0.075, 0.067, 0.118),
+        "crust": (0.055, 0.047, 0.090),
+        "surface0": (0.122, 0.114, 0.180),
+        "surface1": (0.149, 0.137, 0.227),
+        "surface2": (0.180, 0.169, 0.259),
+        "overlay0": (0.431, 0.416, 0.525),
+        "text": (0.878, 0.871, 0.957),
+        "subtext0": (0.565, 0.549, 0.667),
+        "subtext1": (0.753, 0.745, 0.859),
+        "blue": (0.769, 0.655, 0.906),
+        "teal": (0.612, 0.812, 0.847),
+        "green": (0.192, 0.455, 0.561),
+        "red": (0.922, 0.435, 0.573),
+        "mauve": (0.922, 0.737, 0.729),
+        "peach": (0.965, 0.757, 0.467),
+        "lavender": (0.337, 0.624, 0.729),
+    },
+    "solarized": {
+        "base": (0.000, 0.169, 0.212),
+        "mantle": (0.000, 0.133, 0.173),
+        "crust": (0.000, 0.102, 0.133),
+        "surface0": (0.027, 0.212, 0.259),
+        "surface1": (0.051, 0.251, 0.314),
+        "surface2": (0.102, 0.302, 0.369),
+        "overlay0": (0.345, 0.431, 0.459),
+        "text": (0.992, 0.965, 0.890),
+        "subtext0": (0.514, 0.580, 0.588),
+        "subtext1": (0.576, 0.631, 0.631),
+        "blue": (0.149, 0.545, 0.824),
+        "teal": (0.165, 0.631, 0.596),
+        "green": (0.522, 0.600, 0.000),
+        "red": (0.863, 0.196, 0.184),
+        "mauve": (0.424, 0.443, 0.769),
+        "peach": (0.796, 0.294, 0.086),
+        "lavender": (0.827, 0.212, 0.510),
+    },
+    "everforest": {
+        "base": (0.176, 0.208, 0.231),
+        "mantle": (0.153, 0.184, 0.204),
+        "crust": (0.129, 0.161, 0.180),
+        "surface0": (0.204, 0.247, 0.267),
+        "surface1": (0.239, 0.282, 0.302),
+        "surface2": (0.278, 0.322, 0.345),
+        "overlay0": (0.478, 0.518, 0.471),
+        "text": (0.827, 0.776, 0.667),
+        "subtext0": (0.522, 0.573, 0.537),
+        "subtext1": (0.616, 0.663, 0.627),
+        "blue": (0.498, 0.733, 0.702),
+        "teal": (0.514, 0.753, 0.573),
+        "green": (0.655, 0.753, 0.502),
+        "red": (0.902, 0.494, 0.502),
+        "mauve": (0.839, 0.600, 0.714),
+        "peach": (0.902, 0.596, 0.459),
+        "lavender": (0.859, 0.737, 0.498),
+    },
+    "kanagawa": {
+        "base": (0.122, 0.122, 0.157),
+        "mantle": (0.086, 0.086, 0.114),
+        "crust": (0.059, 0.059, 0.078),
+        "surface0": (0.165, 0.165, 0.216),
+        "surface1": (0.212, 0.212, 0.275),
+        "surface2": (0.267, 0.267, 0.353),
+        "overlay0": (0.329, 0.329, 0.427),
+        "text": (0.863, 0.843, 0.729),
+        "subtext0": (0.627, 0.627, 0.565),
+        "subtext1": (0.784, 0.753, 0.576),
+        "blue": (0.494, 0.612, 0.847),
+        "teal": (0.478, 0.659, 0.624),
+        "green": (0.596, 0.733, 0.424),
+        "red": (1.000, 0.365, 0.384),
+        "mauve": (0.584, 0.498, 0.722),
+        "peach": (1.000, 0.627, 0.400),
+        "lavender": (0.498, 0.706, 0.792),
+    },
+    "one-dark": {
+        "base": (0.157, 0.173, 0.204),
+        "mantle": (0.133, 0.149, 0.180),
+        "crust": (0.110, 0.125, 0.157),
+        "surface0": (0.173, 0.192, 0.227),
+        "surface1": (0.243, 0.267, 0.318),
+        "surface2": (0.294, 0.322, 0.388),
+        "overlay0": (0.361, 0.388, 0.439),
+        "text": (0.671, 0.698, 0.749),
+        "subtext0": (0.510, 0.537, 0.592),
+        "subtext1": (0.592, 0.620, 0.675),
+        "blue": (0.380, 0.686, 0.937),
+        "teal": (0.337, 0.714, 0.761),
+        "green": (0.596, 0.765, 0.475),
+        "red": (0.878, 0.424, 0.459),
+        "mauve": (0.776, 0.471, 0.867),
+        "peach": (0.820, 0.604, 0.400),
+        "lavender": (0.898, 0.753, 0.482),
     },
 }
 
@@ -446,24 +560,25 @@ def _rgba_css(rgb, a):
     )
 
 
-_text = _rgb_hex(C["text"])
-_subtext0 = _rgb_hex(C["subtext0"])
-_blue = _rgb_hex(C["blue"])
-_red = _rgb_hex(C["red"])
-_base = _rgb_hex(C["base"])
-_surface0 = _rgb_hex(C["surface0"])
-_surface1 = _rgb_hex(C["surface1"])
-_overlay0 = _rgb_hex(C["overlay0"])
-_overlay0_a02 = _rgba_css(C["overlay0"], 0.2)
-_overlay0_a03 = _rgba_css(C["overlay0"], 0.3)
-_red_a01 = _rgba_css(C["red"], 0.1)
-_red_a015 = _rgba_css(C["red"], 0.15)
-_red_a03 = _rgba_css(C["red"], 0.3)
-_surface0_a09 = _rgba_css(C["surface0"], 0.9)
-_surface0_a08 = _rgba_css(C["surface0"], 0.8)
-_subtext1 = _rgb_hex(C["subtext1"])
-
-CSS = f"""
+def _build_css(theme):
+    """Generate the full CSS stylesheet for the given theme palette."""
+    _text = _rgb_hex(theme["text"])
+    _subtext0 = _rgb_hex(theme["subtext0"])
+    _blue = _rgb_hex(theme["blue"])
+    _red = _rgb_hex(theme["red"])
+    _base = _rgb_hex(theme["base"])
+    _surface0 = _rgb_hex(theme["surface0"])
+    _surface1 = _rgb_hex(theme["surface1"])
+    _overlay0 = _rgb_hex(theme["overlay0"])
+    _overlay0_a02 = _rgba_css(theme["overlay0"], 0.2)
+    _overlay0_a03 = _rgba_css(theme["overlay0"], 0.3)
+    _red_a01 = _rgba_css(theme["red"], 0.1)
+    _red_a015 = _rgba_css(theme["red"], 0.15)
+    _red_a03 = _rgba_css(theme["red"], 0.3)
+    _surface0_a09 = _rgba_css(theme["surface0"], 0.9)
+    _surface0_a08 = _rgba_css(theme["surface0"], 0.8)
+    _subtext1 = _rgb_hex(theme["subtext1"])
+    return f"""
 window {{
     background-color: rgba(0, 0, 0, 0.95);
 }}
@@ -617,7 +732,33 @@ window {{
     padding: 4px 12px;
     font-size: 12px;
 }}
+.theme-btn {{
+    all: unset;
+    font-size: 14px;
+    padding: 4px 4px;
+    border-radius: 50%;
+    opacity: 0.4;
+}}
+.theme-btn:hover {{
+    opacity: 0.8;
+}}
+.theme-btn-active {{
+    opacity: 1;
+}}
+.theme-btn-mocha {{ color: #89b4fa; }}
+.theme-btn-nord {{ color: #81a1c1; }}
+.theme-btn-dracula {{ color: #bd93f9; }}
+.theme-btn-gruvbox {{ color: #83a598; }}
+.theme-btn-tokyo-night {{ color: #7aa2f7; }}
+.theme-btn-rose-pine {{ color: #c4a7e7; }}
+.theme-btn-solarized {{ color: #268bd2; }}
+.theme-btn-everforest {{ color: #7fbbb3; }}
+.theme-btn-kanagawa {{ color: #7e9cd8; }}
+.theme-btn-one-dark {{ color: #61afef; }}
 """
+
+
+CSS = _build_css(C)
 
 
 # ── Application ─────────────────────────────────────────────────────────────
@@ -658,10 +799,10 @@ class OverviewApp(Gtk.Application):
         )
         Gtk4LayerShell.set_namespace(self.win, "hyprcomp-overview")
 
-        css = Gtk.CssProvider()
-        css.load_from_string(CSS)
+        self._css_provider = Gtk.CssProvider()
+        self._css_provider.load_from_string(CSS)
         Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            Gdk.Display.get_default(), self._css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
         key_ctrl = Gtk.EventControllerKey()
@@ -869,6 +1010,37 @@ class OverviewApp(Gtk.Application):
 
         return False
 
+    # ── Theme switching ─────────────────────────────────────────────────────
+
+    def _apply_theme(self, theme_name):
+        global C, WIN_COLORS
+        C = THEMES[theme_name]
+        WIN_COLORS = [C["blue"], C["teal"], C["green"], C["mauve"], C["peach"], C["lavender"]]
+        self._css_provider.load_from_string(_build_css(C))
+        self._build_grid()
+        self._save_theme(theme_name)
+
+    def _save_theme(self, theme_name):
+        config_path = os.path.join(CONFIG_DIR, "config.toml")
+        try:
+            lines = []
+            found = False
+            if os.path.exists(config_path):
+                with open(config_path) as f:
+                    for line in f:
+                        if line.startswith("theme"):
+                            lines.append(f'theme = "{theme_name}"\n')
+                            found = True
+                        else:
+                            lines.append(line)
+            if not found:
+                lines.insert(0, f'theme = "{theme_name}"\n')
+            os.makedirs(CONFIG_DIR, exist_ok=True)
+            with open(config_path, "w") as f:
+                f.writelines(lines)
+        except Exception as e:
+            logger.debug("Failed to save theme: %s", e)
+
     # ── Grid building ───────────────────────────────────────────────────────
 
     def _build_grid(self):
@@ -909,6 +1081,21 @@ class OverviewApp(Gtk.Application):
         close_all_btn.connect("clicked", self._on_close_all)
         toolbar.append(close_all_btn)
 
+        sep2 = Gtk.Label(label=" / ")
+        sep2.add_css_class("toolbar-sep")
+        toolbar.append(sep2)
+
+        current_theme = next((k for k, v in THEMES.items() if v is C), "mocha")
+        for name in THEMES:
+            btn = Gtk.Button(label="\u25cf")
+            btn.set_focusable(False)
+            btn.add_css_class("theme-btn")
+            btn.add_css_class(f"theme-btn-{name}")
+            if name == current_theme:
+                btn.add_css_class("theme-btn-active")
+            btn.connect("clicked", lambda _b, n=name: self._apply_theme(n))
+            toolbar.append(btn)
+
         spacer = Gtk.Label()
         spacer.set_hexpand(True)
         toolbar.append(spacer)
@@ -916,7 +1103,8 @@ class OverviewApp(Gtk.Application):
         hints = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         for key, desc in [
             ("hjkl", "navigate"), ("enter", "go"), ("0", "desktop"),
-            ("1-9", "jump"), ("x", "close"), ("n", "new"), ("q", "quit"),
+            ("1-9", "jump"), ("x", "close"), ("n", "new"),
+            ("t", "theme"), ("q", "quit"),
         ]:
             item = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
             key_lbl = Gtk.Label(label=key)
@@ -1294,6 +1482,13 @@ class OverviewApp(Gtk.Application):
 
         if keyval == Gdk.KEY_n:
             self._on_new_project()
+            return True
+
+        if keyval == Gdk.KEY_t:
+            names = list(THEMES.keys())
+            current = next((k for k, v in THEMES.items() if v is C), "mocha")
+            idx = (names.index(current) + 1) % len(names)
+            self._apply_theme(names[idx])
             return True
 
         return False
