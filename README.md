@@ -59,7 +59,7 @@ Close the current project with a confirm dialog (SUPER+X) without opening the ov
 
 Row-aware workspace buttons showing only the current project's workspaces, with a project name indicator (`1/4 | myproject`).
 
-![Waybar](showcase/waybar.jpg)
+![Waybar](showcase/waybar.gif)
 
 ### Per-project app config
 
