@@ -2,7 +2,7 @@
 
 **2D project-based workspace grid for Hyprland.** Each project gets its own row of workspaces -- swipe between projects vertically and between windows horizontally.
 
-![HyprComp Overview](showcase/overview.png)
+![HyprComp Overview](showcase/overview.gif)
 
 > [!NOTE]
 > Inspired by [Theo's (t3.gg) post about "The Agentic Code Problem"](https://x.com/theo/status/2018091358251372601) ([video](https://www.youtube.com/watch?v=YVq28OTPCKw)) -- when working on multiple projects with AI coding agents, everything ends up split across terminal tabs, browser windows, and IDEs with no natural grouping. HyprComp gives each project its own isolated row of workspaces so everything stays together, including per-project Chromium instances with separate `--user-data-dir` for cookie/session isolation.
