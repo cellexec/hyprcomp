@@ -6,7 +6,7 @@
 > This was built on a live [Omarchy](https://omarchy.com) instance and has never been tested as a fresh install on a clean Arch/Hyprland setup. The installation guide below is a best-effort reference, not a guaranteed step-by-step. Paths, dependencies, and config formats may vary depending on your setup. Contributions for a cleaner installer, improved install guide, or new features are very welcome.
 
 > [!NOTE]
-> This project was inspired by [Theo's (t3.gg) post about "The Agentic Code Problem"](https://x.com/theo/status/2018091358251372601) ([video](https://www.youtube.com/watch?v=YVq28OTPCKw)) -- when working on multiple projects with AI coding agents, projects end up split across terminal tabs, browser windows, and IDEs with no natural grouping. You spend more time switching between apps than building. HyprComp solves this by giving each project its own isolated row of workspaces so everything stays grouped together.
+> This project was inspired by [Theo's (t3.gg) post about "The Agentic Code Problem"](https://x.com/theo/status/2018091358251372601) ([video](https://www.youtube.com/watch?v=YVq28OTPCKw)) -- when working on multiple projects with AI coding agents, projects end up split across terminal tabs, browser windows, and IDEs with no natural grouping. You spend more time switching between apps than building. HyprComp solves this by giving each project its own isolated row of workspaces so everything stays grouped together. Each project can launch its own Chromium instance with a separate `--user-data-dir`, isolating cookies, auth sessions, and localStorage per project -- no more cross-project login collisions.
 
 <!-- TODO: Replace with actual hero screenshot/video -->
 ![HyprComp Overview](showcase/overview.jpg)
