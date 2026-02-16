@@ -9,7 +9,8 @@
 > This project was inspired by [Theo's (t3.gg) post about "The Agentic Code Problem"](https://x.com/theo/status/2018091358251372601) ([video](https://www.youtube.com/watch?v=YVq28OTPCKw)) -- when working on multiple projects with AI coding agents, projects end up split across terminal tabs, browser windows, and IDEs with no natural grouping. You spend more time switching between apps than building. HyprComp solves this by giving each project its own isolated row of workspaces so everything stays grouped together. Each project can launch its own Chromium instance with a separate `--user-data-dir`, isolating cookies, auth sessions, and localStorage per project -- no more cross-project login collisions.
 
 <!-- TODO: Replace with actual hero screenshot/video -->
-![HyprComp Overview](showcase/overview.jpg)
+
+![HyprComp Overview](showcase/overview.png)
 
 ## How it works
 
@@ -32,6 +33,7 @@ The `hyprcomp` script translates navigation into absolute workspace numbers and 
 Fullscreen overlay showing all projects in a 2D grid with live workspace thumbnails, active badge, and keyboard navigation.
 
 <!-- TODO: Replace with actual video/screenshot -->
+
 ![Overview](showcase/overview.mp4)
 
 ### Gesture navigation
@@ -39,6 +41,7 @@ Fullscreen overlay showing all projects in a 2D grid with live workspace thumbna
 3-finger swipe horizontally between windows, vertically between projects. Swiping down past the last project opens the project launcher.
 
 <!-- TODO: Replace with actual video/screenshot -->
+
 ![Gestures](showcase/gestures.mp4)
 
 ### Desktop row
@@ -46,6 +49,7 @@ Fullscreen overlay showing all projects in a 2D grid with live workspace thumbna
 Dedicated row for standalone apps (browser, Discord, etc.) that persists when closing all projects. Always shown at the top of the overview.
 
 <!-- TODO: Replace with actual video/screenshot -->
+
 ![Desktop Row](showcase/desktop-row.jpg)
 
 ### Project launcher
@@ -53,6 +57,7 @@ Dedicated row for standalone apps (browser, Discord, etc.) that persists when cl
 Pick a folder from `~/projects/` via walker menu (SUPER+N). Supports nested subprojects for monorepos. Automatically launches configured apps per `.hyprcomp.toml`.
 
 <!-- TODO: Replace with actual video/screenshot -->
+
 ![Project Launcher](showcase/launcher.mp4)
 
 ### Quick close (SUPER+X)
@@ -60,6 +65,7 @@ Pick a folder from `~/projects/` via walker menu (SUPER+N). Supports nested subp
 Close the current project with a confirm dialog without opening the overview. Instant response via the running daemon.
 
 <!-- TODO: Replace with actual video/screenshot -->
+
 ![Quick Close](showcase/quick-close.mp4)
 
 ### Waybar integration
@@ -67,6 +73,7 @@ Close the current project with a confirm dialog without opening the overview. In
 Project name with index (`1/4 | myproject`) and row-aware workspace buttons that only show the current project's workspaces.
 
 <!-- TODO: Replace with actual screenshot -->
+
 ![Waybar](showcase/waybar.jpg)
 
 ### Per-project app config
@@ -74,37 +81,38 @@ Project name with index (`1/4 | myproject`) and row-aware workspace buttons that
 Each project can define which apps to launch in `.hyprcomp.toml`, with isolated Chromium profiles and environment-based URLs.
 
 <!-- TODO: Replace with actual screenshot -->
+
 ![Config](showcase/config.jpg)
 
 ## Keybindings
 
 ### Navigation
 
-| Action | Gesture | Keybinding |
-|--------|---------|------------|
-| Next window | 3-finger swipe left | `SUPER+1-0` |
-| Previous window | 3-finger swipe right | `SUPER+1-0` |
-| Next project | 3-finger swipe up | `SUPER+CTRL+DOWN` |
-| Previous project | 3-finger swipe down | `SUPER+CTRL+UP` |
-| Move window to column | | `SUPER+SHIFT+1-0` |
-| Workspace overview | | `SUPER+Tab` |
-| Close current project | | `SUPER+X` |
-| New project | | `SUPER+N` |
-| Restart overview | | `SUPER+R` |
+| Action                | Gesture              | Keybinding        |
+| --------------------- | -------------------- | ----------------- |
+| Next window           | 3-finger swipe left  | `SUPER+1-0`       |
+| Previous window       | 3-finger swipe right | `SUPER+1-0`       |
+| Next project          | 3-finger swipe up    | `SUPER+CTRL+DOWN` |
+| Previous project      | 3-finger swipe down  | `SUPER+CTRL+UP`   |
+| Move window to column |                      | `SUPER+SHIFT+1-0` |
+| Workspace overview    |                      | `SUPER+Tab`       |
+| Close current project |                      | `SUPER+X`         |
+| New project           |                      | `SUPER+N`         |
+| Restart overview      |                      | `SUPER+R`         |
 
 ### Overview shortcuts
 
-| Key | Action |
-|-----|--------|
-| `hjkl` / arrows | Navigate between workspaces |
-| `Enter` | Switch to selected workspace |
-| `0` / backtick | Jump to Desktop row |
-| `1-9` | Jump to Nth project |
-| `d` | Close hovered window |
-| `a` | Open new window in hovered project |
-| `n` | Open project launcher |
-| `x` / `Delete` | Close hovered project (Desktop cannot be deleted) |
-| `q` / `Escape` | Close overlay |
+| Key             | Action                                            |
+| --------------- | ------------------------------------------------- |
+| `hjkl` / arrows | Navigate between workspaces                       |
+| `Enter`         | Switch to selected workspace                      |
+| `0` / backtick  | Jump to Desktop row                               |
+| `1-9`           | Jump to Nth project                               |
+| `d`             | Close hovered window                              |
+| `a`             | Open new window in hovered project                |
+| `n`             | Open project launcher                             |
+| `x` / `Delete`  | Close hovered project (Desktop cannot be deleted) |
+| `q` / `Escape`  | Close overlay                                     |
 
 ## Installation
 
@@ -193,6 +201,7 @@ terminal = true
 ```
 
 Window types:
+
 - `terminal = true` -- launched in alacritty with zsh
 - `browser = true` -- gets `--user-data-dir` for per-project isolation
 - `url_env = "VAR"` -- reads URL from the project's `.env` file
@@ -237,13 +246,13 @@ hyprcomp restart              Restart overview daemon
 
 ## State files
 
-| Path | Purpose |
-|------|---------|
-| `~/.config/hyprcomp/state` | Current row number |
-| `~/.config/hyprcomp/projects` | Row-to-name mapping |
-| `~/.config/hyprcomp/defaults.toml` | Global default windows config |
-| `~/.config/hyprcomp/chromium/<name>/` | Isolated Chromium profiles |
-| `~/.cache/hyprcomp/thumbs/` | Workspace screenshot cache |
+| Path                                  | Purpose                       |
+| ------------------------------------- | ----------------------------- |
+| `~/.config/hyprcomp/state`            | Current row number            |
+| `~/.config/hyprcomp/projects`         | Row-to-name mapping           |
+| `~/.config/hyprcomp/defaults.toml`    | Global default windows config |
+| `~/.config/hyprcomp/chromium/<name>/` | Isolated Chromium profiles    |
+| `~/.cache/hyprcomp/thumbs/`           | Workspace screenshot cache    |
 
 ## Uninstalling
 
