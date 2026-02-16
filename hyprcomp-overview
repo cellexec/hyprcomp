@@ -5,7 +5,28 @@ Shows a 2D grid of all projects (rows) and workspaces (columns) with
 screenshot thumbnails for the active workspace and synthetic previews
 for occupied workspaces.
 
-Keys: click=switch, d=close windows, a=new workspace, q/Esc=quit.
+Architecture:
+    - Runs as a persistent daemon, toggled via SIGUSR1 from the hyprcomp script.
+    - SIGUSR2 triggers a confirm-close dialog without the full overview.
+    - Communicates with Hyprland via IPC socket (~5ms per query), not hyprctl subprocess.
+    - Screenshots captured via grim in a background thread.
+    - Listens on Hyprland's socket2 for real-time workspace change events.
+
+Workspace numbering:
+    Workspace IDs encode row and column: ws_id = row * 10 + col.
+    Row 0 is the persistent Desktop row (ws 1-10), rows 1-9 are projects
+    (ws 11-20, 21-30, ..., 91-100). Each row supports up to 10 workspaces.
+
+Theming:
+    Colors are stored as RGB float tuples (0.0-1.0) in the THEMES dict.
+    The active theme palette is held in the global ``C``. CSS is regenerated
+    on theme change via ``_build_css()``, and Cairo draw functions read ``C``
+    directly.
+
+Entry points:
+    - No args: run as overview daemon (default)
+    - ``launch <name>``: launch a project's apps headlessly (called by hyprcomp-menu)
+    - ``confirm-close``: show standalone close-project dialog
 """
 
 import ctypes
@@ -46,10 +67,10 @@ logger = logging.getLogger(__name__)
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-CONFIG_DIR = os.path.expanduser("~/.config/hyprcomp")
-PROJECTS_FILE = os.path.join(CONFIG_DIR, "projects")
-STATE_FILE = os.path.join(CONFIG_DIR, "state")
-CACHE_DIR = os.path.expanduser("~/.cache/hyprcomp/thumbs")
+CONFIG_DIR = os.path.expanduser("~/.config/hyprcomp")       # User config directory
+PROJECTS_FILE = os.path.join(CONFIG_DIR, "projects")         # Row-to-name mapping (e.g. "1:myproject")
+STATE_FILE = os.path.join(CONFIG_DIR, "state")               # Current row tracker for waybar
+CACHE_DIR = os.path.expanduser("~/.cache/hyprcomp/thumbs")   # Workspace screenshot cache
 HYPRCOMP_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hyprcomp")
 
 PROJECTS_DIR = os.path.expanduser("~/projects")
@@ -62,11 +83,19 @@ BUILTIN_DEFAULTS = {
     ]
 }
 
-CELL_W, CELL_H = 240, 135
-CELL_GAP = 8
-ROW_GAP = 12
-DESKTOP_ROW = 0
+CELL_W, CELL_H = 240, 135   # Workspace cell dimensions in pixels (16:9)
+CELL_GAP = 8                 # Horizontal gap between workspace cells
+ROW_GAP = 12                 # Vertical gap between project rows
+DESKTOP_ROW = 0              # Reserved row for standalone apps (always visible)
 
+# Each theme is a dict of 17 color keys as (R, G, B) float tuples (0.0-1.0):
+#   Background hierarchy: base > mantle > crust (darkest)
+#   Surface hierarchy:    surface0 > surface1 > surface2 > overlay0 (lightest bg)
+#   Text hierarchy:       text (brightest) > subtext1 > subtext0 (dimmest)
+#   Accents:              blue (primary), teal, green, red, mauve, peach, lavender
+# "blue" is the primary accent used for active states, badges, and highlights.
+# "red" is used for danger/close actions. The remaining accents color synthetic
+# window previews via WIN_COLORS.
 THEMES = {
     "mocha": {
         "base": (0.118, 0.118, 0.180),
@@ -276,8 +305,10 @@ def _load_theme():
     return THEMES[theme_name]
 
 
-C = _load_theme()
+C = _load_theme()  # Active theme palette — referenced by Cairo draw functions and CSS builder
 
+# Accent colors for synthetic window previews (colored rectangles in the grid).
+# Each window in a preview cycles through these colors for visual distinction.
 WIN_COLORS = [C["blue"], C["teal"], C["green"], C["mauve"], C["peach"], C["lavender"]]
 
 # ── Config loading ─────────────────────────────────────────────────────────
@@ -328,6 +359,7 @@ _HYPR_SOCK = None
 
 
 def _get_sock_path():
+    """Resolve and cache the Hyprland IPC socket path from environment variables."""
     global _HYPR_SOCK
     if _HYPR_SOCK is None:
         sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
@@ -365,6 +397,7 @@ def hyprctl_dispatch(args):
 
 
 def load_projects():
+    """Load the row→name mapping from the projects file. Returns {row_int: name_str}."""
     projects = {}
     if os.path.isfile(PROJECTS_FILE):
         with open(PROJECTS_FILE) as f:
@@ -390,6 +423,7 @@ def capture_workspace_thumb(ws_id):
 
 
 def capture_screenshot(monitor_name):
+    """Capture a scaled-down screenshot of a monitor via grim. Returns path or None."""
     os.makedirs(CACHE_DIR, exist_ok=True)
     path = os.path.join(CACHE_DIR, "active.jpg")
     try:
@@ -475,18 +509,24 @@ def load_grid_data():
 
 
 # ── Workspace math ──────────────────────────────────────────────────────────
+# Workspace IDs encode position: ws_id = row * 10 + col.
+# Row 0 = Desktop (ws 1-10), Row 1 = first project (ws 11-20), etc.
+# Columns are 1-indexed (1-10), so ws 10 = Desktop col 10, ws 20 = Row 1 col 10.
 
 
 def ws_to_row(ws_id):
+    """Extract project row from workspace ID. E.g. ws 23 → row 2."""
     return (ws_id - 1) // 10
 
 
 def ws_to_col(ws_id):
+    """Extract column (1-10) from workspace ID. E.g. ws 23 → col 3, ws 20 → col 10."""
     col = ws_id % 10
     return col if col != 0 else 10
 
 
 def row_col_to_ws(row, col):
+    """Convert (row, col) to workspace ID. E.g. (2, 3) → 23."""
     return row * 10 + col
 
 
@@ -561,7 +601,12 @@ def _rgba_css(rgb, a):
 
 
 def _build_css(theme):
-    """Generate the full CSS stylesheet for the given theme palette."""
+    """Generate the full GTK4 CSS stylesheet for the given theme palette.
+
+    Converts RGB float tuples to hex/rgba strings and interpolates them into
+    CSS rules for all UI elements (toolbar, cells, badges, buttons, etc.).
+    Called once at startup and again on each theme switch.
+    """
     _text = _rgb_hex(theme["text"])
     _subtext0 = _rgb_hex(theme["subtext0"])
     _blue = _rgb_hex(theme["blue"])
@@ -765,25 +810,32 @@ CSS = _build_css(C)
 
 
 class OverviewApp(Gtk.Application):
+    """Persistent GTK4 layer-shell overlay that displays the workspace grid.
+
+    Runs as a daemon — the window is shown/hidden via SIGUSR1 rather than
+    creating a new process each time. This keeps startup instant (~5ms for
+    IPC queries + grid rebuild).
+    """
+
     def __init__(self):
         super().__init__(application_id="com.hyprcomp.overview",
                          flags=Gio.ApplicationFlags.NON_UNIQUE)
-        self.screenshot_texture = None
-        self.hovered_ws = None
-        self.hovered_row = None
-        self._sel_row = None
-        self._sel_col = None
-        self._last_sel_row = None
+        self.screenshot_texture = None   # Gdk.Texture for the active workspace screenshot
+        self.hovered_ws = None           # Currently hovered workspace ID (mouse or keyboard)
+        self.hovered_row = None          # Row of the currently hovered cell
+        self._sel_row = None             # Keyboard/mouse selection: row
+        self._sel_col = None             # Keyboard/mouse selection: column
+        self._last_sel_row = None        # Last known selection (restored after mouse leave)
         self._last_sel_col = None
-        self._confirm_row = None
-        self._confirm_overlay = None
-        self._cells = {}
-        self._row_labels = {}
-        self._row_max = {}
-        self._visible = False
+        self._confirm_row = None         # Row pending deletion, or "all" for close-all dialog
+        self._confirm_overlay = None     # The confirm dialog widget (if showing)
+        self._cells = {}                 # {ws_id: Gtk.Button} — workspace cell widgets
+        self._row_labels = {}            # {row: Gtk.Label} — project name labels
+        self._row_max = {}               # {row: max_col} — highest occupied column per row
+        self._visible = False            # Whether the overlay is currently shown
 
     def do_activate(self):
-        # Create window once — reused across show/hide cycles
+        """Set up the layer-shell window, CSS, keyboard handler, and signal listeners."""
         self.win = Gtk.ApplicationWindow(application=self)
         Gtk4LayerShell.init_for_window(self.win)
         Gtk4LayerShell.set_layer(self.win, Gtk4LayerShell.Layer.OVERLAY)
@@ -818,6 +870,7 @@ class OverviewApp(Gtk.Application):
         self._show()
 
     def _on_toggle(self):
+        """Handle SIGUSR1: toggle overlay visibility."""
         logger.debug("Toggle signal: visible=%s", self._visible)
         if self._visible:
             self._hide()
@@ -897,6 +950,7 @@ class OverviewApp(Gtk.Application):
         self._hide()
 
     def _show(self):
+        """Show the overlay: load grid data from Hyprland IPC and build the UI."""
         self._visible = True
         self.screenshot_texture = None
         self.win.set_visible(True)
@@ -917,6 +971,7 @@ class OverviewApp(Gtk.Application):
         threading.Thread(target=self._capture_active_thumb, daemon=True).start()
 
     def _capture_active_thumb(self):
+        """Background thread: capture a fresh screenshot of the active workspace via grim."""
         try:
             active_ws = hyprctl_json("activeworkspace")
             path = capture_screenshot(active_ws.get("monitor", ""))
@@ -926,6 +981,7 @@ class OverviewApp(Gtk.Application):
             logger.debug("Failed to capture active thumb: %s", e)
 
     def _update_active_thumb(self, path):
+        """GLib.idle_add callback: swap the active cell's content with the fresh screenshot."""
         if not self._visible:
             return False
         try:
@@ -946,6 +1002,7 @@ class OverviewApp(Gtk.Application):
         return False
 
     def _hide(self):
+        """Hide the overlay window (does not destroy it — reused on next show)."""
         self._visible = False
         self.win.set_visible(False)
 
@@ -957,6 +1014,7 @@ class OverviewApp(Gtk.Application):
         t.start()
 
     def _ws_listener(self):
+        """Background thread: connect to Hyprland's socket2 and listen for workspace>> events."""
         sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
         runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
         sock_path = f"{runtime}/hypr/{sig}/.socket2.sock"
@@ -1013,6 +1071,7 @@ class OverviewApp(Gtk.Application):
     # ── Theme switching ─────────────────────────────────────────────────────
 
     def _apply_theme(self, theme_name):
+        """Switch to a new theme: update globals, reload CSS, rebuild grid, persist to config."""
         global C, WIN_COLORS
         C = THEMES[theme_name]
         WIN_COLORS = [C["blue"], C["teal"], C["green"], C["mauve"], C["peach"], C["lavender"]]
@@ -1021,6 +1080,7 @@ class OverviewApp(Gtk.Application):
         self._save_theme(theme_name)
 
     def _save_theme(self, theme_name):
+        """Persist the theme choice to config.toml (replaces existing theme line or prepends)."""
         config_path = os.path.join(CONFIG_DIR, "config.toml")
         try:
             lines = []
@@ -1044,9 +1104,15 @@ class OverviewApp(Gtk.Application):
     # ── Grid building ───────────────────────────────────────────────────────
 
     def _build_grid(self):
+        """Build the full overview UI: toolbar + scrollable grid of project rows.
+
+        Each project row has a title (badge + name + delete button) and a horizontal
+        row of workspace cells. Cells show screenshots, synthetic previews, or empty
+        placeholders. The Desktop row is always rendered first at the top.
+        """
         self._cells = {}
         self._row_labels = {}
-        
+
         outer = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
         )
@@ -1353,6 +1419,7 @@ class OverviewApp(Gtk.Application):
     # ── Selection (shared between mouse hover and keyboard) ────────────────
 
     def _on_cell_enter(self, _ctrl, _x, _y, ws, row):
+        """Mouse entered a workspace cell — update selection highlight."""
         self._sel_row = row
         self._sel_col = ws_to_col(ws)
         self._update_selection()
@@ -1366,6 +1433,7 @@ class OverviewApp(Gtk.Application):
             self._update_selection()
 
     def _on_cell_leave(self, _ctrl):
+        """Mouse left a workspace cell — clear selection (keyboard can re-activate)."""
         self._sel_row = None
         self._sel_col = None
         self.hovered_ws = None
@@ -1408,6 +1476,7 @@ class OverviewApp(Gtk.Application):
     # ── Event handlers ──────────────────────────────────────────────────────
 
     def _on_key(self, _ctrl, keyval, _keycode, _state):
+        """Dispatch keyboard input. Handles confirm dialogs, vim navigation, and shortcuts."""
         # Confirm dialog mode
         if self._confirm_row is not None:
             if keyval in (Gdk.KEY_Return, Gdk.KEY_y):
@@ -1516,6 +1585,7 @@ class OverviewApp(Gtk.Application):
         self._close_overlay()
 
     def _on_cell_click(self, _btn, ws_id):
+        """Handle click on a workspace cell — switch to that workspace."""
         self._switch_to_ws(ws_id)
 
     def _close_ws_windows(self, ws_id):
@@ -1620,6 +1690,7 @@ class OverviewApp(Gtk.Application):
         return False  # for GLib.timeout_add compatibility
 
     def _on_delete_click(self, _btn, row, name, _group):
+        """Handle click on a project's delete (x) button."""
         self._show_delete_confirm(row, name)
 
     def _show_delete_confirm(self, row, name):
@@ -1663,6 +1734,7 @@ class OverviewApp(Gtk.Application):
         self._delete_project_row(row)
 
     def _dismiss_confirm(self):
+        """Cancel the confirm dialog and restore the grid view with previous selection."""
         saved_row = self._sel_row
         saved_col = self._sel_col
         self._confirm_row = None
@@ -1763,6 +1835,7 @@ class OverviewApp(Gtk.Application):
             self._reload_grid()
 
     def _on_new_project(self, _btn=None):
+        """Hide overlay and launch the project picker menu (hyprcomp-menu)."""
         self._hide()
         menu_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hyprcomp-menu")
         subprocess.Popen([menu_bin], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -2016,6 +2089,7 @@ class ConfirmCloseApp(Gtk.Application):
 
 
 def main():
+    """Entry point: dispatch to overview daemon, project launcher, or confirm-close dialog."""
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 
