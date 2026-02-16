@@ -13,13 +13,13 @@ Projects live in a 2D grid -- rows are projects, columns are windows within a pr
 
 ```
                Col 1       Col 2       Col 3
-Desktop        ws 91       ws 92       ws 93       (row 9)
-Project A      ws 1        ws 2        ws 3        (row 0)
-Project B      ws 11       ws 12       ws 13       (row 1)
-Project C      ws 21       ws 22       ws 23       (row 2)
+Desktop        ws 1        ws 2        ws 3        (row 0)
+Project A      ws 11       ws 12       ws 13       (row 1)
+Project B      ws 21       ws 22       ws 23       (row 2)
+Project C      ws 31       ws 32       ws 33       (row 3)
 ```
 
-Up to **9 project rows** (0--8) with **10 workspaces** each, plus the Desktop row fixed at row 9. The `hyprcomp` script translates navigation into absolute workspace numbers via `hyprctl`, with directional animations -- `slide` horizontally, `slidevert` between projects, `fade` for Desktop transitions. Navigation clamps to the highest occupied column so you never land on an empty workspace.
+Up to **9 project rows** (1--9) with **10 workspaces** each, plus the Desktop row fixed at row 0. The `hyprcomp` script translates navigation into absolute workspace numbers via `hyprctl`, with directional animations -- `slide` horizontally, `slidevert` vertically. Navigation clamps to the highest occupied column so you never land on an empty workspace.
 
 The overview is a GTK4 + layer-shell daemon that queries Hyprland's IPC socket directly (~2.5ms) and captures live screenshots via grim.
 

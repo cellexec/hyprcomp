@@ -4,7 +4,7 @@ set -euo pipefail
 CONFIG_DIR="$HOME/.config/hyprcomp"
 STATE_FILE="$CONFIG_DIR/state"
 PROJECTS_FILE="$CONFIG_DIR/projects"
-DESKTOP_ROW=9
+DESKTOP_ROW=0
 
 mkdir -p "$CONFIG_DIR"
 
@@ -67,11 +67,11 @@ row_exists() {
 
 next_free_row() {
     if [[ ! -f "$PROJECTS_FILE" ]] || [[ ! -s "$PROJECTS_FILE" ]]; then
-        echo 0
+        echo 1
         return
     fi
     # Reuse gaps from deleted rows
-    local expected=0
+    local expected=1
     while IFS= read -r row; do
         if [[ $row -ne $expected ]]; then
             echo "$expected"
@@ -132,7 +132,7 @@ cmd_up() {
 
     # Find the nearest existing project row above
     target_row=$((row - 1))
-    while [[ $target_row -ge 0 ]]; do
+    while [[ $target_row -ge 1 ]]; do
         if row_exists "$target_row"; then
             break
         fi
@@ -140,7 +140,7 @@ cmd_up() {
     done
 
     # No project row above — go to Desktop row
-    if [[ $target_row -lt 0 ]]; then
+    if [[ $target_row -lt 1 ]]; then
         target_row=$DESKTOP_ROW
     fi
 
@@ -155,11 +155,7 @@ cmd_up() {
     target_ws=$(row_col_to_workspace "$target_row" "$col")
     echo "current_row=$target_row" > "$STATE_FILE"
     capture_thumb "$ws"
-    if [[ $target_row -eq $DESKTOP_ROW ]]; then
-        set_animation fade
-    else
-        set_animation slidevert
-    fi
+    set_animation slidevert
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
     local name
@@ -187,7 +183,7 @@ cmd_down() {
 
     if [[ $row -eq $DESKTOP_ROW ]]; then
         # From Desktop, go to first project row
-        target_row=0
+        target_row=1
         while [[ $target_row -le $max_row ]]; do
             if row_exists "$target_row"; then
                 break
@@ -226,11 +222,7 @@ cmd_down() {
     target_ws=$(row_col_to_workspace "$target_row" "$col")
     echo "current_row=$target_row" > "$STATE_FILE"
     capture_thumb "$ws"
-    if [[ $row -eq $DESKTOP_ROW ]]; then
-        set_animation fade
-    else
-        set_animation slidevert
-    fi
+    set_animation slidevert
     hyprctl dispatch workspace "$target_ws" > /dev/null
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
     local name
@@ -362,8 +354,8 @@ cmd_create() {
     local row
     row=$(next_free_row)
 
-    if [[ $row -ge 9 ]]; then
-        echo "Maximum 9 project rows (0-8) reached"
+    if [[ $row -ge 10 ]]; then
+        echo "Maximum 9 project rows (1-9) reached"
         return 1
     fi
 
@@ -432,7 +424,7 @@ cmd_reorder() {
     # Check if reordering is needed
     local needs=false
     for i in "${!old_rows[@]}"; do
-        [[ ${old_rows[$i]} -ne $i ]] && needs=true && break
+        [[ ${old_rows[$i]} -ne $((i + 1)) ]] && needs=true && break
     done
     $needs || return
 
@@ -443,12 +435,12 @@ cmd_reorder() {
     # Track where the current row ends up
     local cur_row
     cur_row=$(get_current_row)
-    local new_cur_row=0
+    local new_cur_row=1
 
     # Move windows for each row that changes
     for i in "${!old_rows[@]}"; do
         local old=${old_rows[$i]}
-        local new=$i
+        local new=$((i + 1))
 
         [[ $old -eq $cur_row ]] && new_cur_row=$new
         [[ $old -eq $new ]] && continue
@@ -466,7 +458,7 @@ cmd_reorder() {
     # Rewrite projects file
     > "$PROJECTS_FILE"
     for i in "${!old_rows[@]}"; do
-        echo "${i}:${old_names[$i]}" >> "$PROJECTS_FILE"
+        echo "$((i + 1)):${old_names[$i]}" >> "$PROJECTS_FILE"
     done
 
     # Update state

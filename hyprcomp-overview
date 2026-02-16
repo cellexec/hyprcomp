@@ -53,7 +53,7 @@ BUILTIN_DEFAULTS = {
 CELL_W, CELL_H = 240, 135
 CELL_GAP = 8
 ROW_GAP = 12
-DESKTOP_ROW = 9
+DESKTOP_ROW = 0
 
 # Catppuccin Mocha palette
 C = {
@@ -1049,7 +1049,7 @@ class OverviewApp(Gtk.Application):
         """Move keyboard selection by delta row/col."""
         if not self._row_max:
             return
-        rows = sorted(self._row_max.keys(), key=lambda r: (-1 if r == DESKTOP_ROW else r))
+        rows = sorted(self._row_max.keys(), key=lambda r: (r if r != DESKTOP_ROW else -1))
         if self._sel_row is None:
             self._sel_row = rows[0]
             self._sel_col = 1

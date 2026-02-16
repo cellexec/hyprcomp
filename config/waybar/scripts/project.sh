@@ -20,7 +20,7 @@ get_project_name() {
     fi
 }
 
-DESKTOP_ROW=9
+DESKTOP_ROW=0
 
 ws=$(get_active_workspace)
 row=$(workspace_to_row "$ws")
