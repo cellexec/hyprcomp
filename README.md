@@ -29,31 +29,31 @@ The overview is a GTK4 + layer-shell daemon that queries Hyprland's IPC socket d
 
 Fullscreen overlay with live thumbnails, active badges, and keyboard navigation. Runs as a background daemon listening on Hyprland's socket2 for real-time updates. Generates synthetic window previews when no screenshot is cached.
 
-![Overview](showcase/overview.mp4)
+<video src="showcase/overview.mp4" controls muted loop></video>
 
 ### Gesture navigation
 
 3-finger swipe left/right between windows, up/down between projects. Swiping past the last project opens the launcher.
 
-![Gestures](showcase/gestures.mp4)
+<video src="showcase/gestures.mp4" controls muted loop></video>
 
 ### Desktop row
 
 Persistent row for standalone apps (browser, Discord, etc.) -- always visible at the top of the overview, survives closing all projects.
 
-![Desktop Row](showcase/desktop-row.jpg)
+<video src="showcase/desktop-row.mp4" controls muted loop></video>
 
 ### Project launcher
 
 Walker-based menu (SUPER+N) that scans `~/projects/`, filters already-open projects and excluded directories, and supports recursive subproject navigation. Launches apps per `.hyprcomp.toml`.
 
-![Project Launcher](showcase/launcher.mp4)
+<video src="showcase/launcher.mp4" controls muted loop></video>
 
 ### Quick close
 
 Close the current project with a confirm dialog (SUPER+X) without opening the overview.
 
-![Quick Close](showcase/quick-close.mp4)
+<video src="showcase/quick-close.mp4" controls muted loop></video>
 
 ### Waybar integration
 
