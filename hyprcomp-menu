@@ -16,7 +16,17 @@ get_existing() {
 
 get_excludes() {
     [[ -f "$CONFIG_TOML" ]] || return
-    sed -n 's/^exclude *= *\[//p' "$CONFIG_TOML" | tr -d '"]' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep .
+    python3 -c "
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+import sys
+with open(sys.argv[1], 'rb') as f:
+    cfg = tomllib.load(f)
+for item in cfg.get('exclude', []):
+    print(item)
+" "$CONFIG_TOML" 2>/dev/null
 }
 
 is_excluded() {

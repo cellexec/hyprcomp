@@ -24,13 +24,25 @@ gi.require_version("Gtk4LayerShell", "1.0")
 
 from gi.repository import Gdk, Gio, GLib, Gtk, Gtk4LayerShell
 import json
+import logging
 import os
 import signal
 import socket
 import subprocess
 import sys
 import threading
-import tomllib
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+logging.basicConfig(
+    format="[hyprcomp-overview] %(message)s",
+    stream=sys.stderr,
+    level=logging.DEBUG if os.environ.get("HYPRCOMP_VERBOSE") == "1" else logging.WARNING,
+)
+logger = logging.getLogger(__name__)
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
@@ -55,23 +67,102 @@ CELL_GAP = 8
 ROW_GAP = 12
 DESKTOP_ROW = 0
 
-# Catppuccin Mocha palette
-C = {
-    "base": (0.118, 0.118, 0.180),
-    "surface0": (0.192, 0.196, 0.267),
-    "surface1": (0.271, 0.278, 0.353),
-    "surface2": (0.345, 0.357, 0.439),
-    "overlay0": (0.424, 0.439, 0.537),
-    "text": (0.804, 0.839, 0.957),
-    "subtext0": (0.651, 0.678, 0.784),
-    "blue": (0.537, 0.706, 0.980),
-    "teal": (0.580, 0.886, 0.835),
-    "green": (0.651, 0.890, 0.631),
-    "red": (0.953, 0.545, 0.659),
-    "mauve": (0.796, 0.651, 0.969),
-    "peach": (0.980, 0.702, 0.529),
-    "lavender": (0.702, 0.718, 0.969),
+THEMES = {
+    "mocha": {
+        "base": (0.118, 0.118, 0.180),
+        "mantle": (0.094, 0.094, 0.145),
+        "crust": (0.071, 0.071, 0.106),
+        "surface0": (0.192, 0.196, 0.267),
+        "surface1": (0.271, 0.278, 0.353),
+        "surface2": (0.345, 0.357, 0.439),
+        "overlay0": (0.424, 0.439, 0.537),
+        "text": (0.804, 0.839, 0.957),
+        "subtext0": (0.651, 0.678, 0.784),
+        "subtext1": (0.729, 0.757, 0.871),
+        "blue": (0.537, 0.706, 0.980),
+        "teal": (0.580, 0.886, 0.835),
+        "green": (0.651, 0.890, 0.631),
+        "red": (0.953, 0.545, 0.659),
+        "mauve": (0.796, 0.651, 0.969),
+        "peach": (0.980, 0.702, 0.529),
+        "lavender": (0.702, 0.718, 0.969),
+    },
+    "latte": {
+        "base": (0.937, 0.929, 0.965),
+        "mantle": (0.906, 0.898, 0.941),
+        "crust": (0.863, 0.855, 0.910),
+        "surface0": (0.800, 0.792, 0.855),
+        "surface1": (0.737, 0.729, 0.804),
+        "surface2": (0.672, 0.663, 0.753),
+        "overlay0": (0.608, 0.600, 0.702),
+        "text": (0.298, 0.286, 0.369),
+        "subtext0": (0.427, 0.416, 0.510),
+        "subtext1": (0.361, 0.349, 0.439),
+        "blue": (0.114, 0.388, 0.784),
+        "teal": (0.145, 0.584, 0.506),
+        "green": (0.251, 0.565, 0.082),
+        "red": (0.816, 0.169, 0.310),
+        "mauve": (0.533, 0.235, 0.847),
+        "peach": (0.996, 0.439, 0.098),
+        "lavender": (0.451, 0.471, 0.839),
+    },
+    "frappe": {
+        "base": (0.184, 0.192, 0.255),
+        "mantle": (0.161, 0.169, 0.224),
+        "crust": (0.141, 0.149, 0.200),
+        "surface0": (0.255, 0.263, 0.337),
+        "surface1": (0.318, 0.329, 0.412),
+        "surface2": (0.388, 0.400, 0.490),
+        "overlay0": (0.455, 0.471, 0.569),
+        "text": (0.773, 0.804, 0.918),
+        "subtext0": (0.647, 0.675, 0.776),
+        "subtext1": (0.710, 0.741, 0.847),
+        "blue": (0.549, 0.706, 0.980),
+        "teal": (0.506, 0.843, 0.788),
+        "green": (0.651, 0.859, 0.580),
+        "red": (0.906, 0.502, 0.612),
+        "mauve": (0.792, 0.620, 0.969),
+        "peach": (0.937, 0.671, 0.510),
+        "lavender": (0.702, 0.722, 0.973),
+    },
+    "macchiato": {
+        "base": (0.145, 0.153, 0.216),
+        "mantle": (0.122, 0.129, 0.184),
+        "crust": (0.094, 0.102, 0.149),
+        "surface0": (0.224, 0.231, 0.306),
+        "surface1": (0.298, 0.310, 0.396),
+        "surface2": (0.373, 0.388, 0.486),
+        "overlay0": (0.443, 0.463, 0.565),
+        "text": (0.792, 0.827, 0.945),
+        "subtext0": (0.659, 0.690, 0.800),
+        "subtext1": (0.725, 0.757, 0.875),
+        "blue": (0.541, 0.714, 0.984),
+        "teal": (0.541, 0.867, 0.812),
+        "green": (0.651, 0.875, 0.604),
+        "red": (0.929, 0.525, 0.635),
+        "mauve": (0.780, 0.635, 0.969),
+        "peach": (0.961, 0.686, 0.518),
+        "lavender": (0.702, 0.722, 0.973),
+    },
 }
+
+
+def _load_theme():
+    """Load theme name from config.toml, return the palette dict."""
+    theme_name = "mocha"
+    config_path = os.path.join(CONFIG_DIR, "config.toml")
+    try:
+        with open(config_path, "rb") as f:
+            cfg = tomllib.load(f)
+        theme_name = cfg.get("theme", "mocha")
+    except (FileNotFoundError, Exception) as e:
+        logger.debug("Theme config load: %s", e)
+    if theme_name not in THEMES:
+        theme_name = "mocha"
+    return THEMES[theme_name]
+
+
+C = _load_theme()
 
 WIN_COLORS = [C["blue"], C["teal"], C["green"], C["mauve"], C["peach"], C["lavender"]]
 
@@ -83,7 +174,8 @@ def _load_toml(path):
     try:
         with open(path, "rb") as f:
             return tomllib.load(f)
-    except (FileNotFoundError, tomllib.TOMLDecodeError):
+    except (FileNotFoundError, tomllib.TOMLDecodeError) as e:
+        logger.debug("Failed to load %s: %s", path, e)
         return None
 
 
@@ -170,6 +262,19 @@ def load_projects():
     return projects
 
 
+def capture_workspace_thumb(ws_id):
+    """Capture a thumbnail for a specific workspace (blocking)."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    path = os.path.join(CACHE_DIR, f"ws-{ws_id}.jpg")
+    try:
+        subprocess.run(
+            ["grim", "-t", "jpeg", "-q", "50", "-s", "0.25", path],
+            capture_output=True, timeout=5,
+        )
+    except Exception as e:
+        logger.debug("Workspace thumb capture failed for ws %d: %s", ws_id, e)
+
+
 def capture_screenshot(monitor_name):
     os.makedirs(CACHE_DIR, exist_ok=True)
     path = os.path.join(CACHE_DIR, "active.jpg")
@@ -178,11 +283,12 @@ def capture_screenshot(monitor_name):
         if monitor_name:
             cmd.extend(["-o", monitor_name])
         cmd.append(path)
+        logger.debug("Capturing screenshot: %s", " ".join(cmd))
         subprocess.run(cmd, capture_output=True, timeout=5)
         if os.path.isfile(path):
             return path
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Screenshot capture failed: %s", e)
     return None
 
 
@@ -325,6 +431,38 @@ def draw_empty(da, cr, width, height, *_args):
 
 # ── CSS ─────────────────────────────────────────────────────────────────────
 
+
+def _rgb_hex(rgb):
+    """Convert (r, g, b) floats to #rrggbb hex string."""
+    return "#{:02x}{:02x}{:02x}".format(
+        int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
+    )
+
+
+def _rgba_css(rgb, a):
+    """Convert (r, g, b) floats + alpha to rgba() CSS string."""
+    return "rgba({}, {}, {}, {})".format(
+        int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), a
+    )
+
+
+_text = _rgb_hex(C["text"])
+_subtext0 = _rgb_hex(C["subtext0"])
+_blue = _rgb_hex(C["blue"])
+_red = _rgb_hex(C["red"])
+_base = _rgb_hex(C["base"])
+_surface0 = _rgb_hex(C["surface0"])
+_surface1 = _rgb_hex(C["surface1"])
+_overlay0 = _rgb_hex(C["overlay0"])
+_overlay0_a02 = _rgba_css(C["overlay0"], 0.2)
+_overlay0_a03 = _rgba_css(C["overlay0"], 0.3)
+_red_a01 = _rgba_css(C["red"], 0.1)
+_red_a015 = _rgba_css(C["red"], 0.15)
+_red_a03 = _rgba_css(C["red"], 0.3)
+_surface0_a09 = _rgba_css(C["surface0"], 0.9)
+_surface0_a08 = _rgba_css(C["surface0"], 0.8)
+_subtext1 = _rgb_hex(C["subtext1"])
+
 CSS = f"""
 window {{
     background-color: rgba(0, 0, 0, 0.95);
@@ -342,31 +480,28 @@ window {{
     padding: 20px 40px 40px 40px;
 }}
 .project-label {{
-    color: #cdd6f4;
+    color: {_text};
     font-size: 16px;
     font-weight: bold;
 }}
 .project-badge {{
-    color: #89b4fa;
+    color: {_blue};
     font-size: 11px;
     font-weight: bold;
-    background: rgba(108, 112, 134, 0.2);
+    background: {_overlay0_a02};
     border-radius: 4px;
     min-width: 18px;
     padding: 1px 6px;
 }}
 .project-label-active {{
-    color: #89b4fa;
+    color: {_blue};
 }}
 .ws-cell {{
     all: unset;
     border-radius: 8px;
-    border: 3px solid rgba(108, 112, 134, 0.3);
+    border: 3px solid {_overlay0_a03};
     min-width: {CELL_W}px;
     min-height: {CELL_H}px;
-}}
-.ws-cell:hover {{
-    border-color: #89b4fa;
 }}
 .ws-cell-active {{
     border-color: transparent;
@@ -376,8 +511,8 @@ window {{
 }}
 .ws-badge {{
     opacity: 0;
-    background: #89b4fa;
-    color: #1e1e2e;
+    background: {_blue};
+    color: {_base};
     font-size: 9px;
     font-weight: bold;
     border-radius: 4px;
@@ -385,89 +520,89 @@ window {{
     margin: 6px;
 }}
 .ws-cell-selected {{
-    border-color: #89b4fa;
+    border-color: {_blue};
     border-width: 3px;
 }}
 .del-btn {{
     all: unset;
-    color: #f38ba8;
+    color: {_red};
     padding: 4px 8px;
     font-size: 16px;
     border-radius: 6px;
 }}
 .del-btn:hover {{
-    color: #f38ba8;
-    background: rgba(243, 139, 168, 0.1);
+    color: {_red};
+    background: {_red_a01};
 }}
 .toolbar {{
-    background: rgba(108, 112, 134, 0.2);
+    background: {_overlay0_a02};
     border-radius: 0;
     padding: 8px 40px;
 }}
 .toolbar-logo-icon {{
-    color: #89b4fa;
+    color: {_blue};
     font-family: 'JetBrainsMono Nerd Font';
     font-size: 18px;
     margin-right: 6px;
 }}
 .toolbar-logo-text {{
-    color: #89b4fa;
+    color: {_blue};
     font-size: 14px;
     font-weight: bold;
     margin-right: 32px;
 }}
 .toolbar-btn {{
     all: unset;
-    color: #cdd6f4;
+    color: {_text};
     padding: 4px 0;
     font-size: 12px;
 }}
 .toolbar-btn:hover {{
-    color: #89b4fa;
+    color: {_blue};
 }}
 .toolbar-btn-danger {{
-    color: #6c7086;
+    color: {_overlay0};
 }}
 .toolbar-btn-danger:hover {{
-    color: #f38ba8;
+    color: {_red};
 }}
 .toolbar-sep {{
-    color: rgba(108, 112, 134, 0.2);
+    color: {_overlay0_a02};
     font-size: 12px;
 }}
 .toolbar-shortcuts {{
-    color: #6c7086;
+    color: {_overlay0};
     font-size: 11px;
 }}
 .toolbar-shortcut-key {{
-    color: #89b4fa;
+    color: {_blue};
     font-size: 11px;
 }}
 .project-entry {{
-    color: #cdd6f4;
-    background: #313244;
-    border: 1px solid #89b4fa;
+    color: {_text};
+    background: {_surface0};
+    border: 1px solid {_blue};
     border-radius: 6px;
     padding: 6px 12px;
     font-size: 14px;
     min-width: 200px;
-    caret-color: #89b4fa;
+    caret-color: {_blue};
 }}
 .confirm-box {{
-    background: rgba(49, 50, 68, 0.9);
+    background: {_surface0_a09};
     border-radius: 8px;
     padding: 8px 12px;
 }}
 .confirm-label {{
-    color: #f38ba8;
+    color: {_red};
     font-size: 13px;
     padding-right: 8px;
 }}
 .confirm-yes {{
     all: unset;
-    color: #f38ba8;
-    background: rgba(243, 139, 168, 0.15);
-    border: 1px solid rgba(243, 139, 168, 0.3);
+    color: {_red};
+    background: {_red_a015};
+    border: 1px solid {_red_a03};
     border-radius: 6px;
     padding: 4px 12px;
     font-size: 12px;
@@ -475,9 +610,9 @@ window {{
 }}
 .confirm-no {{
     all: unset;
-    color: #a6adc8;
-    background: rgba(49, 50, 68, 0.8);
-    border: 1px solid rgba(108, 112, 134, 0.3);
+    color: {_subtext1};
+    background: {_surface0_a08};
+    border: 1px solid {_overlay0_a03};
     border-radius: 6px;
     padding: 4px 12px;
     font-size: 12px;
@@ -497,6 +632,8 @@ class OverviewApp(Gtk.Application):
         self.hovered_row = None
         self._sel_row = None
         self._sel_col = None
+        self._last_sel_row = None
+        self._last_sel_col = None
         self._confirm_row = None
         self._confirm_overlay = None
         self._cells = {}
@@ -540,6 +677,7 @@ class OverviewApp(Gtk.Application):
         self._show()
 
     def _on_toggle(self):
+        logger.debug("Toggle signal: visible=%s", self._visible)
         if self._visible:
             self._hide()
         else:
@@ -643,8 +781,8 @@ class OverviewApp(Gtk.Application):
             path = capture_screenshot(active_ws.get("monitor", ""))
             if path and self._visible:
                 GLib.idle_add(self._update_active_thumb, path)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to capture active thumb: %s", e)
 
     def _update_active_thumb(self, path):
         if not self._visible:
@@ -696,11 +834,12 @@ class OverviewApp(Gtk.Application):
                     if line.startswith("workspace>>"):
                         try:
                             ws_id = int(line.split(">>", 1)[1])
+                            logger.debug("Workspace event: %d", ws_id)
                             GLib.idle_add(self._on_workspace_changed, ws_id)
                         except ValueError:
                             pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Workspace listener error: %s", e)
 
     def _on_workspace_changed(self, ws_id):
         """Update active highlight when workspace changes via gesture."""
@@ -898,6 +1037,7 @@ class OverviewApp(Gtk.Application):
 
             motion = Gtk.EventControllerMotion()
             motion.connect("enter", self._on_cell_enter, ws, DESKTOP_ROW)
+            motion.connect("motion", self._on_cell_motion, ws, DESKTOP_ROW)
             motion.connect("leave", self._on_cell_leave)
             btn.add_controller(motion)
 
@@ -995,6 +1135,7 @@ class OverviewApp(Gtk.Application):
                 # Hover tracking for keyboard shortcuts
                 motion = Gtk.EventControllerMotion()
                 motion.connect("enter", self._on_cell_enter, ws, row)
+                motion.connect("motion", self._on_cell_motion, ws, row)
                 motion.connect("leave", self._on_cell_leave)
                 btn.add_controller(motion)
 
@@ -1021,29 +1162,40 @@ class OverviewApp(Gtk.Application):
                 pass
         return None
 
-    # ── Hover tracking ──────────────────────────────────────────────────────
+    # ── Selection (shared between mouse hover and keyboard) ────────────────
 
     def _on_cell_enter(self, _ctrl, _x, _y, ws, row):
-        self.hovered_ws = ws
-        self.hovered_row = row
+        self._sel_row = row
+        self._sel_col = ws_to_col(ws)
+        self._update_selection()
+
+    def _on_cell_motion(self, _ctrl, _x, _y, ws, row):
+        """Re-apply selection if keyboard moved it away while mouse stayed."""
+        col = ws_to_col(ws)
+        if self._sel_row != row or self._sel_col != col:
+            self._sel_row = row
+            self._sel_col = col
+            self._update_selection()
 
     def _on_cell_leave(self, _ctrl):
+        self._sel_row = None
+        self._sel_col = None
         self.hovered_ws = None
         self.hovered_row = None
-
-    # ── Keyboard selection ─────────────────────────────────────────────────
+        self._update_selection()
 
     def _update_selection(self):
-        """Update CSS class on selected cell."""
+        """Update CSS class and hovered state from _sel_row/_sel_col."""
         for ws, btn in self._cells.items():
             btn.remove_css_class("ws-cell-selected")
         if self._sel_row is not None and self._sel_col is not None:
             ws = row_col_to_ws(self._sel_row, self._sel_col)
             if ws in self._cells:
                 self._cells[ws].add_css_class("ws-cell-selected")
-            # Also update hovered state so d/a/x work with keyboard
             self.hovered_ws = ws
             self.hovered_row = self._sel_row
+            self._last_sel_row = self._sel_row
+            self._last_sel_col = self._sel_col
 
     def _move_selection(self, dr, dc):
         """Move keyboard selection by delta row/col."""
@@ -1051,8 +1203,13 @@ class OverviewApp(Gtk.Application):
             return
         rows = sorted(self._row_max.keys(), key=lambda r: (r if r != DESKTOP_ROW else -1))
         if self._sel_row is None:
-            self._sel_row = rows[0]
-            self._sel_col = 1
+            # Restore from last known position, or fall back to first row
+            if self._last_sel_row is not None and self._last_sel_row in self._row_max:
+                self._sel_row = self._last_sel_row
+                self._sel_col = self._last_sel_col or 1
+            else:
+                self._sel_row = rows[0]
+                self._sel_col = 1
         else:
             idx = rows.index(self._sel_row) if self._sel_row in rows else 0
             idx = max(0, min(len(rows) - 1, idx + dr))
@@ -1167,15 +1324,83 @@ class OverviewApp(Gtk.Application):
         self._switch_to_ws(ws_id)
 
     def _close_ws_windows(self, ws_id):
-        """Close all windows in a workspace and rebuild grid."""
-        for client in self.ws_clients.get(ws_id, []):
-            addr = client.get("address", "")
-            if addr:
-                subprocess.run(
-                    ["hyprctl", "dispatch", "closewindow", f"address:{addr}"],
-                    capture_output=True,
-                )
-        self._reload_grid()
+        """Close all windows in a workspace, compact the row, and rebuild grid."""
+        row = ws_to_row(ws_id)
+        col = ws_to_col(ws_id)
+
+        # Close windows in the target workspace
+        addrs = [c.get("address", "") for c in self.ws_clients.get(ws_id, []) if c.get("address")]
+        if addrs:
+            batch = ";".join(f"dispatch closewindow address:{a}" for a in addrs)
+            subprocess.run(["hyprctl", "--batch", batch], capture_output=True)
+
+        # Shift higher columns left in Hyprland
+        move_batch = ""
+        for c in range(col + 1, 11):
+            src_ws = row_col_to_ws(row, c)
+            dst_ws = row_col_to_ws(row, c - 1)
+            for client in self.ws_clients.get(src_ws, []):
+                addr = client.get("address", "")
+                if addr:
+                    move_batch += f"dispatch movetoworkspacesilent {dst_ws},address:{addr};"
+        if move_batch:
+            subprocess.run(["hyprctl", "--batch", move_batch], capture_output=True)
+
+        # Update local ws_clients: shift entries left, drop the closed one
+        self.ws_clients.pop(ws_id, None)
+        for c in range(col + 1, 11):
+            src_ws = row_col_to_ws(row, c)
+            dst_ws = row_col_to_ws(row, c - 1)
+            clients = self.ws_clients.pop(src_ws, None)
+            if clients:
+                self.ws_clients[dst_ws] = clients
+
+        # Update active workspace tracking if it's in the same row
+        if self.active_row == row:
+            if self.active_col == col:
+                # Closed the active workspace — move active to col 1
+                self.active_col = max(col - 1, 1)
+            elif self.active_col > col:
+                # Active was to the right — shift left
+                self.active_col -= 1
+            self.active_ws_id = row_col_to_ws(row, self.active_col)
+
+        # Shift cached thumbnails left, remove the last one
+        for c in range(col, 10):
+            src = os.path.join(CACHE_DIR, f"ws-{row_col_to_ws(row, c + 1)}.jpg")
+            dst = os.path.join(CACHE_DIR, f"ws-{row_col_to_ws(row, c)}.jpg")
+            try:
+                os.rename(src, dst)
+            except FileNotFoundError:
+                try:
+                    os.remove(dst)
+                except FileNotFoundError:
+                    pass
+        try:
+            os.remove(os.path.join(CACHE_DIR, f"ws-{row_col_to_ws(row, 10)}.jpg"))
+        except FileNotFoundError:
+            pass
+
+        # If no windows remain in this row, delete the project entirely
+        has_remaining = any(
+            row_col_to_ws(row, c) in self.ws_clients
+            for c in range(1, 11)
+        )
+        if not has_remaining and row != DESKTOP_ROW and row in self.projects:
+            # Clean all thumbnails for this row
+            for c in range(1, 11):
+                try:
+                    os.remove(os.path.join(CACHE_DIR, f"ws-{row_col_to_ws(row, c)}.jpg"))
+                except FileNotFoundError:
+                    pass
+            subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
+            self._reload_grid()
+            return
+
+        # Clear screenshot texture so it doesn't show stale active thumb
+        self.screenshot_texture = None
+        self._build_grid()
+
 
     def _new_workspace_in_row(self, row):
         """Switch to first empty workspace after last occupied in row."""
@@ -1197,6 +1422,7 @@ class OverviewApp(Gtk.Application):
         self.active_row = ws_to_row(self.active_ws_id)
         self.active_col = ws_to_col(self.active_ws_id)
         self._build_grid()
+        return False  # for GLib.timeout_add compatibility
 
     def _on_delete_click(self, _btn, row, name, _group):
         self._show_delete_confirm(row, name)
@@ -1329,10 +1555,14 @@ class OverviewApp(Gtk.Application):
             for client in self.ws_clients.get(ws, []):
                 addr = client.get("address", "")
                 if addr:
-                    subprocess.run(
-                        ["hyprctl", "dispatch", "closewindow", f"address:{addr}"],
-                        capture_output=True,
-                    )
+                    hyprctl_dispatch(f"closewindow address:{addr}")
+        # Clean up cached thumbnails for this row
+        for col in range(1, 11):
+            thumb = os.path.join(CACHE_DIR, f"ws-{row_col_to_ws(row, col)}.jpg")
+            try:
+                os.remove(thumb)
+            except FileNotFoundError:
+                pass
         subprocess.run([HYPRCOMP_BIN, "delete-row", str(row)], capture_output=True)
         if reload:
             self._reload_grid()
@@ -1394,6 +1624,10 @@ class OverviewApp(Gtk.Application):
                 after = sum(1 for c in hyprctl_json("clients") if c["workspace"]["id"] == ws)
                 if after > before:
                     break
+
+            # Capture thumbnail before switching to next workspace
+            time.sleep(0.3)
+            capture_workspace_thumb(ws)
 
         hyprctl_dispatch(f"workspace {row_col_to_ws(row, 1)}")
         subprocess.Popen(
@@ -1481,6 +1715,10 @@ def launch_project(name):
             after = sum(1 for c in hyprctl_json("clients") if c["workspace"]["id"] == ws)
             if after > before:
                 break
+
+        # Capture thumbnail before switching to next workspace
+        time.sleep(0.3)
+        capture_workspace_thumb(ws)
 
     hyprctl_dispatch(f"workspace {row_col_to_ws(row, 1)}")
     subprocess.Popen(

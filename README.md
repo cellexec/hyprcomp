@@ -88,7 +88,7 @@ Define which apps to launch per project in `.hyprcomp.toml` -- terminal apps, is
 | `Enter`         | Switch to selected workspace                      |
 | `0` / backtick  | Jump to Desktop row                               |
 | `1`--`9`        | Jump to Nth project                               |
-| `d`             | Close hovered window                              |
+| `d`             | Close hovered workspace (compacts row, auto-closes empty projects) |
 | `a`             | Open new window in hovered project                |
 | `n`             | Open project launcher                             |
 | `x` / `Delete`  | Close hovered project (Desktop cannot be deleted) |
@@ -105,7 +105,9 @@ Define which apps to launch per project in `.hyprcomp.toml` -- terminal apps, is
 
 | Required | Optional |
 | --- | --- |
-| [Hyprland](https://hyprland.org), jq, [alacritty](https://alacritty.org), [walker](https://github.com/abenz1267/walker) | [waybar](https://github.com/Alexays/Waybar), Python 3.11+ w/ PyGObject & gtk4-layer-shell, [grim](https://sr.ht/~emersion/grim/) |
+| [Hyprland](https://hyprland.org), jq, [alacritty](https://alacritty.org), [walker](https://github.com/abenz1267/walker) | [waybar](https://github.com/Alexays/Waybar), Python 3.11+ w/ PyGObject & gtk4-layer-shell (or Python 3.x w/ [tomli](https://pypi.org/project/tomli/)), [grim](https://sr.ht/~emersion/grim/) |
+
+Run `hyprcomp check-deps` to verify all dependencies are installed.
 
 ### Setup
 
@@ -197,6 +199,14 @@ terminal = true
 | `url_env = "VAR"` | Reads URL from the project's `.env` file |
 | _(none)_ | Launched as a plain GUI app |
 
+### Theme
+
+Set a Catppuccin flavor for the overview in `~/.config/hyprcomp/config.toml`:
+
+```toml
+theme = "mocha"  # mocha (default), latte, frappe, macchiato
+```
+
 ### Excluding directories
 
 Hide directories from the project launcher in `~/.config/hyprcomp/config.toml`:
@@ -245,6 +255,10 @@ Subprojects nest recursively.
 | `hyprcomp status` | Show current position |
 | `hyprcomp overview` | Toggle workspace overview |
 | `hyprcomp restart` | Restart overview daemon |
+| `hyprcomp check-deps` | Verify all runtime dependencies |
+| `hyprcomp prune-cache` | Remove stale workspace thumbnails |
+
+Use `hyprcomp --verbose <command>` to enable debug logging to stderr.
 
 `hyprcomp-menu` is the standalone project launcher -- called by SUPER+N or when swiping past the last project.
 
@@ -254,7 +268,7 @@ Subprojects nest recursively.
 | --- | --- |
 | `~/.config/hyprcomp/state` | Current row number |
 | `~/.config/hyprcomp/projects` | Row-to-name mapping |
-| `~/.config/hyprcomp/config.toml` | Exclude list, global settings |
+| `~/.config/hyprcomp/config.toml` | Theme, exclude list, global settings |
 | `~/.config/hyprcomp/defaults.toml` | Default windows config |
 | `~/.config/hyprcomp/chromium/<name>/` | Isolated Chromium profiles |
 | `~/.cache/hyprcomp/thumbs/` | Workspace screenshot cache |

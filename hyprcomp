@@ -5,10 +5,15 @@ CONFIG_DIR="$HOME/.config/hyprcomp"
 STATE_FILE="$CONFIG_DIR/state"
 PROJECTS_FILE="$CONFIG_DIR/projects"
 DESKTOP_ROW=0
+VERBOSE="${HYPRCOMP_VERBOSE:-0}"
 
 mkdir -p "$CONFIG_DIR"
 
 # --- Helpers ---
+
+log() {
+    [[ "$VERBOSE" == "1" ]] && echo "[hyprcomp] $*" >&2 || true
+}
 
 get_active_workspace() {
     hyprctl activeworkspace -j | jq -r '.id'
@@ -107,6 +112,15 @@ set_animation() {
     hyprctl keyword animation "workspaces, 1, 3, default, $1" > /dev/null
 }
 
+clean_row_thumbs() {
+    local row=$1
+    local dir="$HOME/.cache/hyprcomp/thumbs"
+    for col in $(seq 1 10); do
+        local ws=$((row * 10 + col))
+        rm -f "$dir/ws-${ws}.jpg"
+    done
+}
+
 capture_thumb() {
     # Capture a thumbnail of the current workspace before switching away
     local ws=$1
@@ -164,6 +178,7 @@ cmd_up() {
     else
         name=$(get_project_name "$target_row")
     fi
+    log "up: row $row -> $target_row, ws $ws -> $target_ws"
     echo "Switched to row $target_row ($name) workspace $target_ws"
 }
 
@@ -227,6 +242,7 @@ cmd_down() {
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
     local name
     name=$(get_project_name "$target_row")
+    log "down: row $row -> $target_row, ws $ws -> $target_ws"
     echo "Switched to row $target_row ($name) workspace $target_ws"
 }
 
@@ -360,6 +376,7 @@ cmd_create() {
     fi
 
     echo "${row}:${name}" >> "$PROJECTS_FILE"
+    log "create: project '$name' at row $row"
     echo "Created project '$name' at row $row (workspaces $(row_col_to_workspace "$row" 1)-$(row_col_to_workspace "$row" 10))"
 }
 
@@ -389,6 +406,8 @@ cmd_delete() {
         return 1
     fi
 
+    log "delete: project '$name' at row $row"
+    clean_row_thumbs "$row"
     sed -i "/^${row}:/d" "$PROJECTS_FILE"
     echo "Deleted project '$name' (row $row)"
     cmd_reorder
@@ -406,6 +425,7 @@ cmd_delete_row() {
     fi
     local name
     name=$(get_project_name "$row")
+    clean_row_thumbs "$row"
     sed -i "/^${row}:/d" "$PROJECTS_FILE"
     echo "Deleted project '$name' (row $row)"
     cmd_reorder
@@ -437,7 +457,8 @@ cmd_reorder() {
     cur_row=$(get_current_row)
     local new_cur_row=1
 
-    # Move windows for each row that changes
+    # Build batch command for atomic workspace moves
+    local batch=""
     for i in "${!old_rows[@]}"; do
         local old=${old_rows[$i]}
         local new=$((i + 1))
@@ -448,12 +469,14 @@ cmd_reorder() {
         for col in $(seq 1 10); do
             local old_ws=$((old * 10 + col))
             local new_ws=$((new * 10 + col))
-            echo "$clients_json" | jq -r --argjson ws "$old_ws" \
-                '.[] | select(.workspace.id == $ws) | .address' | while read -r addr; do
-                [[ -n "$addr" ]] && hyprctl dispatch movetoworkspacesilent "$new_ws,address:$addr" > /dev/null
-            done
+            while IFS= read -r addr; do
+                [[ -n "$addr" ]] && batch+="dispatch movetoworkspacesilent $new_ws,address:$addr;"
+            done < <(echo "$clients_json" | jq -r --argjson ws "$old_ws" \
+                '.[] | select(.workspace.id == $ws) | .address')
         done
     done
+    [[ -n "$batch" ]] && hyprctl --batch "$batch" > /dev/null
+    log "reorder: batch moved windows"
 
     # Rewrite projects file
     > "$PROJECTS_FILE"
@@ -464,6 +487,77 @@ cmd_reorder() {
     # Update state
     echo "current_row=$new_cur_row" > "$STATE_FILE"
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+}
+
+cmd_check_deps() {
+    local ok=0 fail=0
+    check_bin() {
+        local name=$1 hint=$2
+        if command -v "$name" &>/dev/null; then
+            printf "  \033[32m✓\033[0m %s\n" "$name"
+            ok=$((ok + 1))
+        else
+            printf "  \033[31m✗\033[0m %s — %s\n" "$name" "$hint"
+            fail=$((fail + 1))
+        fi
+    }
+    echo "Checking dependencies..."
+    echo ""
+    echo "Required binaries:"
+    check_bin hyprctl "Part of Hyprland"
+    check_bin jq "Install: pacman -S jq"
+    check_bin grim "Install: pacman -S grim"
+    check_bin walker "Install: github.com/abenz1267/walker"
+    check_bin alacritty "Install: pacman -S alacritty"
+    check_bin pkill "Part of procps-ng"
+    check_bin python3 "Install: pacman -S python"
+    echo ""
+    echo "Python imports:"
+    if python3 -c "import gi" 2>/dev/null; then
+        printf "  \033[32m✓\033[0m gi (PyGObject)\n"
+        ok=$((ok + 1))
+    else
+        printf "  \033[31m✗\033[0m gi — Install: pacman -S python-gobject\n"
+        fail=$((fail + 1))
+    fi
+    if python3 -c "
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli
+" 2>/dev/null; then
+        printf "  \033[32m✓\033[0m tomllib/tomli\n"
+        ok=$((ok + 1))
+    else
+        printf "  \033[31m✗\033[0m tomllib/tomli — Python 3.11+ or: pip install tomli\n"
+        fail=$((fail + 1))
+    fi
+    echo ""
+    echo "$ok passed, $fail failed"
+    [[ $fail -eq 0 ]]
+}
+
+cmd_prune_cache() {
+    local dir="$HOME/.cache/hyprcomp/thumbs"
+    [[ -d "$dir" ]] || { echo "No cache directory"; return; }
+    local clients_json
+    clients_json=$(hyprctl clients -j)
+    local removed=0
+    for thumb in "$dir"/ws-*.jpg; do
+        [[ -f "$thumb" ]] || continue
+        local fname
+        fname=$(basename "$thumb")
+        local ws=${fname#ws-}
+        ws=${ws%.jpg}
+        local count
+        count=$(echo "$clients_json" | jq --argjson ws "$ws" \
+            '[.[] | select(.workspace.id == $ws)] | length')
+        if [[ "$count" -eq 0 ]]; then
+            rm -f "$thumb"
+            removed=$((removed + 1))
+        fi
+    done
+    echo "Removed $removed stale thumbnails"
 }
 
 cmd_overview() {
@@ -503,6 +597,13 @@ cmd_restart() {
 
 # --- Main ---
 
+# Handle --verbose flag
+if [[ "${1:-}" == "--verbose" ]]; then
+    VERBOSE=1
+    export HYPRCOMP_VERBOSE=1
+    shift
+fi
+
 cmd=${1:-help}
 shift || true
 
@@ -520,9 +621,11 @@ case "$cmd" in
     delete)     cmd_delete ;;
     delete-row) cmd_delete_row "$@" ;;
     reorder)    cmd_reorder ;;
-    close)      cmd_close ;;
-    overview)   cmd_overview ;;
-    restart)    cmd_restart ;;
+    close)       cmd_close ;;
+    overview)    cmd_overview ;;
+    restart)     cmd_restart ;;
+    check-deps)  cmd_check_deps ;;
+    prune-cache) cmd_prune_cache ;;
     help)
         echo "Usage: hyprcomp <command> [args]"
         echo ""
@@ -540,8 +643,14 @@ case "$cmd" in
         echo "  delete          Unregister current project row"
         echo "  delete-row <N>  Unregister project at row N (closes windows)"
         echo "  reorder         Compact row IDs (close gaps from deleted projects)"
+        echo "  close           Close current project (with confirmation)"
         echo "  overview        Toggle workspace overview overlay"
         echo "  restart         Restart the overview daemon"
+        echo "  check-deps      Verify all runtime dependencies"
+        echo "  prune-cache     Remove stale workspace thumbnails"
+        echo ""
+        echo "Options:"
+        echo "  --verbose       Enable debug logging to stderr"
         ;;
     *)
         echo "Unknown command: $cmd"
