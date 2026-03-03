@@ -87,6 +87,14 @@ next_free_row() {
     echo "$expected"
 }
 
+next_scratch_name() {
+    local n=1
+    while [[ -f "$PROJECTS_FILE" ]] && grep -q ":scratch-${n}$" "$PROJECTS_FILE"; do
+        n=$((n + 1))
+    done
+    echo "scratch-${n}"
+}
+
 workspace_has_windows() {
     local ws=$1
     local count
@@ -380,6 +388,30 @@ cmd_create() {
     echo "Created project '$name' at row $row (workspaces $(row_col_to_workspace "$row" 1)-$(row_col_to_workspace "$row" 10))"
 }
 
+cmd_scratch() {
+    local name="${1:-$(next_scratch_name)}"
+    local row
+    row=$(next_free_row)
+
+    if [[ $row -ge 10 ]]; then
+        echo "Maximum 9 project rows (1-9) reached"
+        return 1
+    fi
+
+    echo "${row}:${name}" >> "$PROJECTS_FILE"
+
+    local ws
+    ws=$(row_col_to_workspace "$row" 1)
+    echo "current_row=$row" > "$STATE_FILE"
+    capture_thumb "$(get_active_workspace)"
+    set_animation slidevert
+    hyprctl dispatch workspace "$ws" > /dev/null
+    hyprctl dispatch exec "[workspace $ws]" alacritty > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+    log "scratch: created '$name' at row $row"
+    echo "Created scratch workspace '$name' at row $row"
+}
+
 cmd_rename() {
     local name=${1:?Usage: hyprcomp rename <name>}
     sync_state
@@ -616,8 +648,9 @@ case "$cmd" in
     move)   cmd_move "$@" ;;
     status) cmd_status ;;
     list)   cmd_list ;;
-    create) cmd_create "$@" ;;
-    rename) cmd_rename "$@" ;;
+    create)  cmd_create "$@" ;;
+    scratch) cmd_scratch "$@" ;;
+    rename)  cmd_rename "$@" ;;
     delete)     cmd_delete ;;
     delete-row) cmd_delete_row "$@" ;;
     reorder)    cmd_reorder ;;
@@ -639,6 +672,7 @@ case "$cmd" in
         echo "  status          Show current project, row, and column"
         echo "  list            List all registered projects"
         echo "  create <name>   Register a new project row"
+        echo "  scratch [name]  Create an empty workspace (auto-named if omitted)"
         echo "  rename <name>   Rename current project row"
         echo "  delete          Unregister current project row"
         echo "  delete-row <N>  Unregister project at row N (closes windows)"

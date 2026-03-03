@@ -94,6 +94,7 @@ build_menu() {
                 echo "$existing" | grep -qxF "${prefix}${name}" || echo "$name"
             fi
         done
+        echo "+ Scratch"
     else
         while IFS= read -r sp; do
             local sp_dir="$parent_dir/$sp"
@@ -214,7 +215,7 @@ build_flat_menu() {
 
 run_flat_menu() {
     local items
-    items=$(build_flat_menu)
+    items=$(printf '%s\n%s' "+ Scratch" "$(build_flat_menu)")
     [[ -z "$items" ]] && return 1
 
     local selection
@@ -232,6 +233,15 @@ main() {
         name=$(run_menu "$PROJECTS_DIR" "" "0") || exit 0
     fi
     [[ -z "$name" ]] && exit 0
+
+    if [[ "$name" == "+ Scratch" ]]; then
+        local scratch_name
+        scratch_name=$(echo "" | walker -d -p "Workspace name…") || exit 0
+        scratch_name=$(echo "$scratch_name" | tr -d '\n')
+        [[ -z "$scratch_name" ]] && exit 0
+        "$(dirname "$0")/hyprcomp" scratch "$scratch_name" &disown
+        exit 0
+    fi
 
     "$OVERVIEW" launch "$name" &disown
 }
