@@ -332,6 +332,80 @@ cmd_move() {
     pkill -SIGRTMIN+10 waybar 2>/dev/null || true
 }
 
+cmd_move_up() {
+    sync_state
+    local ws row col target_row
+    ws=$(get_active_workspace)
+    row=$(workspace_to_row "$ws")
+    col=$(workspace_to_col "$ws")
+
+    if [[ $row -eq $DESKTOP_ROW ]]; then
+        echo "Already at the top row"
+        return 1
+    fi
+
+    target_row=$((row - 1))
+    while [[ $target_row -ge 1 ]]; do
+        row_exists "$target_row" && break
+        target_row=$((target_row - 1))
+    done
+
+    if [[ $target_row -lt 1 ]]; then
+        target_row=$DESKTOP_ROW
+    fi
+
+    local target_ws
+    target_ws=$(row_col_to_workspace "$target_row" "$col")
+    echo "current_row=$target_row" > "$STATE_FILE"
+    capture_thumb "$ws"
+    set_animation slidevert
+    hyprctl dispatch movetoworkspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+    log "move-up: moved window from row $row to $target_row"
+}
+
+cmd_move_down() {
+    sync_state
+    local ws row col target_row max_row
+    ws=$(get_active_workspace)
+    row=$(workspace_to_row "$ws")
+    col=$(workspace_to_col "$ws")
+    max_row=$(get_max_row)
+
+    if [[ $max_row -lt 0 ]] || [[ $row -ge $max_row ]]; then
+        echo "No project row below"
+        return 1
+    fi
+
+    if [[ $row -eq $DESKTOP_ROW ]]; then
+        target_row=1
+        while [[ $target_row -le $max_row ]]; do
+            row_exists "$target_row" && break
+            target_row=$((target_row + 1))
+        done
+    else
+        target_row=$((row + 1))
+        while [[ $target_row -le $max_row ]]; do
+            row_exists "$target_row" && break
+            target_row=$((target_row + 1))
+        done
+    fi
+
+    if [[ $target_row -gt $max_row ]]; then
+        echo "No project row below"
+        return 1
+    fi
+
+    local target_ws
+    target_ws=$(row_col_to_workspace "$target_row" "$col")
+    echo "current_row=$target_row" > "$STATE_FILE"
+    capture_thumb "$ws"
+    set_animation slidevert
+    hyprctl dispatch movetoworkspace "$target_ws" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+    log "move-down: moved window from row $row to $target_row"
+}
+
 cmd_status() {
     sync_state
     local ws row col name
@@ -645,8 +719,10 @@ case "$cmd" in
     left)   cmd_left ;;
     right)  cmd_right ;;
     go)     cmd_go "$@" ;;
-    move)   cmd_move "$@" ;;
-    status) cmd_status ;;
+    move)      cmd_move "$@" ;;
+    move-up)   cmd_move_up ;;
+    move-down) cmd_move_down ;;
+    status)    cmd_status ;;
     list)   cmd_list ;;
     create)  cmd_create "$@" ;;
     scratch) cmd_scratch "$@" ;;
@@ -669,6 +745,8 @@ case "$cmd" in
         echo "  right           Move one column right (row-bounded)"
         echo "  go <col>        Switch to column 1-10 of current project row"
         echo "  move <col>      Move active window to column 1-10 of current row"
+        echo "  move-up         Move active window to row above and follow"
+        echo "  move-down       Move active window to row below and follow"
         echo "  status          Show current project, row, and column"
         echo "  list            List all registered projects"
         echo "  create <name>   Register a new project row"
