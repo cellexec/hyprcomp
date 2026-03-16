@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Web app launcher — opens bookmarked URLs in isolated Chromium windows
+# Config: ~/.config/hyprcomp/webapps.toml
+
+CONFIG_DIR="$HOME/.config/hyprcomp"
+WEBAPPS_FILE="$CONFIG_DIR/webapps.toml"
+CHROMIUM_DIR="$CONFIG_DIR/chromium"
+
+if [[ ! -f "$WEBAPPS_FILE" ]]; then
+    notify-send "hyprcomp" "No webapps config found at $WEBAPPS_FILE"
+    exit 1
+fi
+
+# Parse webapp entries from TOML: emit "name\turl" lines
+parse_webapps() {
+    python3 -c "
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+import sys
+with open(sys.argv[1], 'rb') as f:
+    cfg = tomllib.load(f)
+for app in cfg.get('webapps', []):
+    name = app.get('name', '')
+    url = app.get('url', '')
+    if name and url:
+        print(f'{name}\t{url}')
+" "$WEBAPPS_FILE"
+}
+
+entries=$(parse_webapps)
+[[ -z "$entries" ]] && exit 0
+
+names=$(echo "$entries" | cut -f1)
+
+selection=$(echo "$names" | walker -d -p "Open webapp…") || exit 0
+selection=$(echo "$selection" | tr -d '\n')
+[[ -z "$selection" ]] && exit 0
+
+url=$(echo "$entries" | awk -F'\t' -v sel="$selection" '$1 == sel { print $2; exit }')
+[[ -z "$url" ]] && exit 1
+
+# Sanitize name for directory
+dir_name=$(echo "$selection" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-')
+data_dir="$CHROMIUM_DIR/webapp-$dir_name"
+mkdir -p "$data_dir"
+
+hyprctl dispatch exec -- chromium --user-data-dir="$data_dir" "$url"
