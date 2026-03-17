@@ -462,6 +462,17 @@ cmd_create() {
     echo "Created project '$name' at row $row (workspaces $(row_col_to_workspace "$row" 1)-$(row_col_to_workspace "$row" 10))"
 }
 
+cmd_desktop() {
+    sync_state
+    local ws
+    ws=$(get_active_workspace)
+    capture_thumb "$ws"
+    echo "current_row=$DESKTOP_ROW" > "$STATE_FILE"
+    set_animation slidevert
+    hyprctl dispatch workspace "$(row_col_to_workspace "$DESKTOP_ROW" 1)" > /dev/null
+    pkill -SIGRTMIN+10 waybar 2>/dev/null || true
+}
+
 cmd_scratch() {
     local name="${1:-$(next_scratch_name)}"
     local row
@@ -725,6 +736,7 @@ case "$cmd" in
     status)    cmd_status ;;
     list)   cmd_list ;;
     create)  cmd_create "$@" ;;
+    desktop) cmd_desktop ;;
     scratch) cmd_scratch "$@" ;;
     rename)  cmd_rename "$@" ;;
     delete)     cmd_delete ;;
